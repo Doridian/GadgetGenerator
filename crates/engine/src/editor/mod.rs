@@ -59,7 +59,7 @@ pub const TICKS_PER_SECOND: u64 = 60;
 const DOUBLE_CLICK_MS: u64 = 500;
 const DOUBLE_CLICK_D: i32 = 2;
 /// The title of message boxes (`AfxMessageBox`).
-const APP: &str = "Widget Workshop";
+const APP: &str = "Gadget Generator";
 /// The document's default name (string 2).
 const UNTITLED: &str = "untitled.wgt";
 
@@ -467,7 +467,8 @@ impl Editor {
         }
     }
 
-    /// The window's title (`0x417092`): "Widget Workshop - name".
+    /// The window's title (`0x417092`): "Gadget Generator - name" (the
+    /// original's "Widget Workshop - name").
     #[must_use]
     pub fn title(&self) -> &str {
         &self.title
@@ -1055,7 +1056,7 @@ impl Editor {
             _ => cmd::PLAIN,
         }];
         let name = self.display_name();
-        self.title = format!("Widget Workshop - {name}");
+        self.title = format!("{APP} - {name}");
     }
 
     /// Runs menu command `id`.

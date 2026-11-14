@@ -33,7 +33,7 @@ installing the matching CLI.
 ## GitHub Pages
 
 `.github/workflows/build.yml` publishes the build on every push to
-`main` at <https://doridian.github.io/WidgetWorkshop/>, without game data
+`main` at <https://doridian.github.io/GadgetGenerator/>, without game data
 (the workflow fails if anything but the pages, the icon, the glue and
 the module is in the build). `crates/widget/web/front.html` is the
 site's front page: where to get the CD image, the downloads, and a link
@@ -64,8 +64,8 @@ A browser won't let a page play sound before a click or key press: the
 ## Storage
 
 `web.js` keeps everything in the browser's IndexedDB (database
-`widget-workshop`): the CD image as the `Blob` the file input gave
-(IndexedDB keeps it without reading it into memory), and the port's own
+`widget-workshop`, the port's name before it was renamed): the CD image
+as the `Blob` the file input gave (IndexedDB keeps it without reading it into memory), and the port's own
 files, mounted at `/storage` (`platform::storage::WEB_STORAGE`): the
 widgets the player saves, `WIDGET.INI` (the solved puzzles) and
 `settings.ini`. The editor's file dialogs start and stay there.
@@ -94,7 +94,7 @@ its fragment, which the browser never sends to the server, so the site
 still never sees a widget.
 
 ```
-https://doridian.github.io/WidgetWorkshop/widget.html#n=CLOCK.WGT&w=Ae1a…
+https://doridian.github.io/GadgetGenerator/widget.html#n=CLOCK.WGT&w=Ae1a…
 ```
 
 `n` is the widget's name (optional, percent-encoded); `w` is base64url,

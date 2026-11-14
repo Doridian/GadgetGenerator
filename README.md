@@ -1,13 +1,13 @@
-# Widget Workshop
+# Gadget Generator
 
-A decompilation and native port of **Widget Workshop: A Mad Scientist's
-Laboratory** (Maxis, 1995) to Rust, for Linux, Windows, macOS and
-WebAssembly.
+Gadget Generator is a decompilation and native port of **Widget
+Workshop: A Mad Scientist's Laboratory** (Maxis, 1995) to Rust, for
+Linux, Windows, macOS and WebAssembly.
 
-**Play it in your browser:** <https://doridian.github.io/WidgetWorkshop/> (the
+**Play it in your browser:** <https://doridian.github.io/GadgetGenerator/> (the
 page asks for the CD image, [docs/web.md](docs/web.md)), or download it for
 Linux, Windows or macOS from the
-[releases](https://github.com/Doridian/WidgetWorkshop/releases)
+[releases](https://github.com/Doridian/GadgetGenerator/releases)
 ([Packages](#packages)).
 
 The port opens straight into the editor (the original's intro and main
@@ -45,18 +45,20 @@ Mac/PC CD's own fonts (`WIN31/SVGA`) are there, they win.
 Every push builds the port as one file per platform
 (`.github/workflows/build.yml`); a `v*` tag publishes them on its release:
 
-- `widget-workshop-x86_64.AppImage`, `widget-workshop-aarch64.AppImage` (built on
-  Ubuntu 22.04: glibc 2.35 or newer)
-- `widget-workshop-windows-x86_64.exe` (the C runtime linked in)
-- `widget-workshop-macos.dmg`: `Widget Workshop.app`, for Apple silicon and
+- `gadget-generator-x86_64.AppImage`, `gadget-generator-aarch64.AppImage`
+  (built on Ubuntu 22.04: glibc 2.35 or newer)
+- `gadget-generator-windows-x86_64.exe` (the C runtime linked in)
+- `gadget-generator-macos.dmg`: `Gadget Generator.app`, for Apple silicon and
   Intel (signed ad hoc only: the first start needs a right click, Open)
-- `widget-workshop-web.zip`: the browser build, as on the Pages site
+- `gadget-generator-web.zip`: the browser build, as on the Pages site
 
 None of them carries game data. Started without a CD (from its icon) and
 with no `.iso` or `orig` in the working directory, the port asks for the
 CD image with the system's file dialog and keeps its path in its data
-directory (`cd-path.txt` in `~/.local/share/widget-workshop`,
-`%APPDATA%\Widget Workshop`, `~/Library/Application Support/Widget Workshop`);
+directory (`cd-path.txt` in `~/.local/share/gadget-generator`,
+`%APPDATA%\Gadget Generator`, `~/Library/Application Support/Gadget Generator`;
+the directories of the port's old name, `widget-workshop` or
+`Widget Workshop`, are moved there on the first start);
 it doesn't ask again while the file is there. On Linux the dialog is the
 desktop's (xdg-desktop-portal, else zenity); with neither (a minimal
 system), a window of the port's own asks for the CD image to be dropped on
@@ -120,5 +122,5 @@ The browser build: `tools/build-web.sh`, [docs/web.md](docs/web.md).
 ## Legal
 
 The port's code is under the AGPL-3.0-or-later ([LICENSE](LICENSE)).
-Widget Workshop is © Maxis; this is an unofficial port, and no game data
-is included.
+Widget Workshop is © Maxis; Gadget Generator is an unofficial port, and no
+game data is included.

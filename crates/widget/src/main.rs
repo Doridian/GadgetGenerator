@@ -1,8 +1,9 @@
 // A window, not a console, on Windows (the release build).
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-//! Widget Workshop. Opens straight into the editor (the original's main
-//! menu is left out), with a new widget or the one given.
+//! Gadget Generator, a port of Widget Workshop. Opens straight into the
+//! editor (the original's main menu is left out), with a new widget or
+//! the one given.
 //!
 //! `widget [--overrides=DIR] [--export=DIR] [--no-audio]
 //! [--window-size=WxH] [--fullscreen|--windowed] [--ui-scale=N|auto] [--help]
@@ -57,7 +58,7 @@ use crate::sound::Sound;
 /// project's site (`.github/workflows/build.yml`). In the browser they
 /// open the page they were made on.
 #[cfg(not(target_arch = "wasm32"))]
-const LINK_PAGE: &str = "https://doridian.github.io/WidgetWorkshop/widget.html";
+const LINK_PAGE: &str = "https://doridian.github.io/GadgetGenerator/widget.html";
 
 const USAGE: &str = "usage: widget [--overrides=DIR] [--export=DIR] [--no-audio] [--window-size=WxH] \
 [--fullscreen|--windowed] [--ui-scale=N|auto] [--help] [CD] [WIDGET.WGT|LINK]
@@ -94,9 +95,9 @@ fn exit(code: i32) -> ! {
     #[cfg(target_arch = "wasm32")]
     {
         if code != 0 {
-            platform::web::show_error("Widget Workshop stopped; the console (F12) says why.");
+            platform::web::show_error("Gadget Generator stopped; the console (F12) says why.");
         }
-        panic!("Widget Workshop stopped ({code})");
+        panic!("Gadget Generator stopped ({code})");
     }
     #[cfg(not(target_arch = "wasm32"))]
     std::process::exit(code)
@@ -247,7 +248,7 @@ impl Workshop {
                 self.done = true;
                 Ok(())
             }
-            Err(e) => Err(format!("Widget Workshop didn't start again: {e}")),
+            Err(e) => Err(format!("Gadget Generator didn't start again: {e}")),
         }
     }
 }
@@ -436,7 +437,7 @@ fn main() {
     std::panic::set_hook(Box::new(move |info| {
         report(info);
         if !std::io::IsTerminal::is_terminal(&std::io::stderr()) {
-            pick::error_box(&format!("Widget Workshop stopped: {info}"));
+            pick::error_box(&format!("Gadget Generator stopped: {info}"));
         }
     }));
     let args = args(std::env::args_os().skip(1));
@@ -577,5 +578,5 @@ fn start(args: &Args, assets: Assets) -> Result<(), platform::Error> {
         #[cfg(not(target_arch = "wasm32"))]
         asking: None,
     };
-    platform::run("Widget Workshop", args.window.clone(), app)
+    platform::run("Gadget Generator", args.window.clone(), app)
 }

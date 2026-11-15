@@ -4,8 +4,8 @@ Gadget Generator is a decompilation and native port of **Widget
 Workshop: A Mad Scientist's Laboratory** (Maxis, 1995) to Rust, for
 Linux, Windows, macOS and WebAssembly.
 
-**Play it in your browser:** <https://doridian.github.io/GadgetGenerator/> (the
-page asks for the CD image, [docs/web.md](docs/web.md)), or download it for
+**Play it in your browser:** <https://doridian.github.io/GadgetGenerator/> (with
+or without the CD image, [docs/web.md](docs/web.md)), or download it for
 Linux, Windows or macOS from the
 [releases](https://github.com/Doridian/GadgetGenerator/releases)
 ([Packages](#packages)).
@@ -20,8 +20,13 @@ for `WIDGET.HLP`. It's a non-matching decompilation of the Win95 build's
 the same bytes. The stack is winit, wgpu and cpal, with a resizable
 window, fullscreen and UI scaling.
 
-This repository contains **no game data files or original code**. You
-need your own copy of the game's CD.
+This repository contains **no game data files or original code**.
+Without the game's CD the port runs on its own free replacements:
+OpenWGFX (the pictures and pointers), OpenWSFX (the sounds) and
+OpenWDATA (the texts, dialogs, help, puzzles and sample widgets), built
+into the program (`crates/engine/opengfx`, `opensfx`, `opendata`; how
+they're made: `tools/opengfx`, `tools/opensfx`, `tools/opendata`). With
+your own copy of the CD it uses the original's.
 
 ## Getting the game
 
@@ -53,16 +58,16 @@ Every push builds the port as one file per platform
 - `gadget-generator-web.zip`: the browser build, as on the Pages site
 
 None of them carries game data. Started without a CD (from its icon) and
-with no `.iso` or `orig` in the working directory, the port asks for the
-CD image with the system's file dialog and keeps its path in its data
-directory (`cd-path.txt` in `~/.local/share/gadget-generator`,
+with no `.iso` or `orig` in the working directory, the port runs on its
+own packs; Settings ▸ Change CD... asks for the CD image with the
+system's file dialog and keeps its path in its data directory (`cd-path.txt` in `~/.local/share/gadget-generator`,
 `%APPDATA%\Gadget Generator`, `~/Library/Application Support/Gadget Generator`;
 the directories of the port's old name, `widget-workshop` or
 `Widget Workshop`, are moved there on the first start);
-it doesn't ask again while the file is there. On Linux the dialog is the
+it starts on that CD while the file is there. On Linux the dialog is the
 desktop's (xdg-desktop-portal, else zenity); with neither (a minimal
-system), a window of the port's own asks for the CD image to be dropped on
-it, as Settings ▸ Change CD... does then in the game's window. The icon is
+system), Change CD... asks for the CD image to be dropped on the game's
+window. The icon is
 the port's own (`tools/make-icon.py`).
 
 ## Running

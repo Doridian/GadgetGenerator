@@ -86,6 +86,10 @@ Options: `--open`, `--opengfx`, `--opensfx` and `--opendata`
 (resources that replace or add to the CD's) and `--export=DIR` (writes
 every resource there in that layout and quits). On Linux the sound needs
 ALSA's headers to build (`libasound2-dev`).
+With Nix: `nix develop` gives a shell with the Rust tools, the libraries
+the window and the sound load, and the Python tools' packages; `nix run
+. -- CD.iso` builds and starts it (`flake.nix`), and `nix run
+github:Doridian/GadgetGenerator` without a checkout.
 
 Options ▸ Settings, the port's own, changes the UI scale on the spot
 (Automatic, or 1× to 4× in quarters), the language without a CD (with

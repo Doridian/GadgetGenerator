@@ -1,0 +1,33 @@
+Gadget Generator — a port of Widget Workshop
+
+A free and open way to keep building widgets on today's computers. These are the people and pieces that bring it to the screen:
+
+
+The port:
+
+Doridian
+github.com/Doridian/GadgetGenerator
+
+The free packs it runs on without the CD, made for the project by gustavn64:
+
+OpenWGFX
+the pictures
+
+OpenWSFX
+the sounds
+
+OpenWDATA
+the texts
+
+Built in Rust, with winit, wgpu and cpal
+
+Free software:
+
+Gadget Generator is released under the GNU Affero General Public License, version 3 or (at your option) any later version. You can read, change and share it.
+
+Special thanks to:
+
+everyone who kept their Widget Workshop CD
+and everyone who still builds widgets
+
+Widget Workshop is (c) 1995 Maxis. Widget Workshop and Maxis are trademarks of their respective owners. Gadget Generator is an unofficial project and is not affiliated with or endorsed by them.

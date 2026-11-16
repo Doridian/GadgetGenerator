@@ -18,6 +18,7 @@
 //! at 96 dpi. The pictures are the Doc-To-Help `{ewc}` windows' baggage
 //! BMPs, mapped to the game's palette.
 
+use crate::lang::{tr, trf};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -931,7 +932,7 @@ impl Help {
             .map_or_else(
                 || {
                     if file.title.is_empty() {
-                        "Windows Help".to_owned()
+                        tr("Windows Help").to_owned()
                     } else {
                         file.title.clone()
                     }
@@ -1544,7 +1545,7 @@ impl Help {
             0xbe if shift => self.press_button(B_NEXT),
             _ => {
                 let c = char::from(u8::try_from(vk).unwrap_or(0));
-                if let Some(b) = BUTTONS.iter().position(|b| ui::mnemonic(b) == Some(c)) {
+                if let Some(b) = BUTTONS.iter().position(|b| ui::mnemonic(tr(b)) == Some(c)) {
                     self.press_button(b);
                 }
             }
@@ -1663,7 +1664,7 @@ impl Help {
         // The button bar.
         for (i, (b, label)) in r.buttons.iter().zip(BUTTONS).enumerate() {
             let down = self.pressed == Some(Press::Button(i)) && b.contains(self.mouse.0, self.mouse.1);
-            ui::button(s, font, *b, label, down, false, self.enabled(i));
+            ui::button(s, font, *b, tr(label), down, false, self.enabled(i));
         }
         // The non-scrolling region and its line.
         if !r.nsr.is_empty() {
@@ -2042,7 +2043,7 @@ impl IndexDialog {
             s,
             font,
             self.window,
-            &format!("Help Topics: {title}"),
+            &trf("Help Topics: {}", &[title]),
             self.pressed == Some(IPress::Close),
         );
         // The tab control: one tab, "Index", raised above its page.
@@ -2066,7 +2067,7 @@ impl IndexDialog {
             font,
             e.x0,
             e.y0 - 18,
-            "&1  Type the first few letters of the word you're looking for.",
+            tr("&1  Type the first few letters of the word you're looking for."),
             ui::BLACK,
         );
         s.fill(e, ui::WHITE);
@@ -2079,7 +2080,7 @@ impl IndexDialog {
             font,
             l.x0,
             l.y0 - 18,
-            "&2  Click the index entry you want, and then click Display.",
+            tr("&2  Click the index entry you want, and then click Display."),
             ui::BLACK,
         );
         s.fill(l, ui::WHITE);
@@ -2112,7 +2113,7 @@ impl IndexDialog {
             s,
             font,
             self.display_button(),
-            "&Display",
+            tr("&Display"),
             self.pressed == Some(IPress::Display),
             true,
             self.sel.is_some(),
@@ -2121,7 +2122,7 @@ impl IndexDialog {
             s,
             font,
             self.cancel_button(),
-            "Cancel",
+            tr("Cancel"),
             self.pressed == Some(IPress::Cancel),
             false,
             true,

@@ -98,6 +98,58 @@ function size(n) {
 // image stored (Settings > Change CD...).
 const CHANGE = "widget-workshop-change-cd";
 
+// The start form's words in Swedish, for a browser in Swedish.
+const SV = {
+  "t-cd": "Spelets cd-avbild (.iso)",
+  "t-kept": "Sparad sedan förra gången:",
+  "t-kept2": ". Välj en annan för att byta.",
+  "t-note":
+    "Widget Workshop: A Mad Scientist's Laboratory, Mac/PC-skivan. Avbilden sparas i den här " +
+    "webbläsaren och skickas ingenstans, precis som uppfinningarna du sparar. Uppfinningar som dras " +
+    "till spelet öppnas, och Arkiv ▸ Spara som nedladdning och Ladda ned en uppfinning ger dig dem " +
+    "igen. Arkiv ▸ Kopiera länk till uppfinningen gör en länk som öppnar uppfinningen för alla som " +
+    "har skivan.",
+  open: "Spela utan skivan",
+  start: "Starta",
+  "t-open-note": "Utan skivan använder spelet Gadget Generators egna bilder, ljud, texter och pussel, på",
+  "t-cd-lang": "Med skivan talar det skivans språk.",
+};
+
+// The form in the browser's language, and its language list, which
+// "Play without the CD" follows (`?open&lang=`): the browser's language
+// first, else the one picked last time.
+function formLanguage($) {
+  const sv = (navigator.language || "").toLowerCase().startsWith("sv");
+  if (sv) {
+    for (const [id, text] of Object.entries(SV)) {
+      const el = $(id);
+      if (el) el.textContent = text;
+    }
+  }
+  const lang = $("lang");
+  const open = $("play-open");
+  if (!lang || !open) return;
+  let picked = null;
+  try {
+    picked = localStorage.getItem("widget-workshop-lang");
+  } catch (e) {
+    console.error("storage:", e);
+  }
+  lang.value = picked || (sv ? "sv" : "en");
+  const follow = () => {
+    // The page's own options and widget link stay, the language changed.
+    const q = location.search.replace(/[?&]lang=[^&]*/g, "").replace(/^&/, "?");
+    open.href = `${q && q !== "?" ? q + "&open" : "?open"}&lang=${lang.value}${location.hash}`;
+    try {
+      localStorage.setItem("widget-workshop-lang", lang.value);
+    } catch (e) {
+      console.error("storage:", e);
+    }
+  };
+  lang.onchange = follow;
+  follow();
+}
+
 // Reloads the page into the start form, the stored image kept: Start
 // without picking another goes on with it.
 export function changeCd() {
@@ -118,6 +170,7 @@ export function changeCd() {
 // key either way (platform::audio::resume).
 export async function chooseCd(error, enhanced, onEnhanced) {
   const $ = (id) => document.getElementById(id);
+  formLanguage($);
   let stored = null;
   try {
     stored = await request((await store("cd", "readonly")).get("image"));

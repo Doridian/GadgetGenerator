@@ -5,7 +5,7 @@
 //! editor (the original's main menu is left out), with a new widget or
 //! the one given.
 //!
-//! `widget [--open] [--opengfx[=DIR]] [--opensfx[=DIR]]
+//! `widget [--open] [--lang=en|sv] [--opengfx[=DIR]] [--opensfx[=DIR]]
 //! [--opendata[=DIR]] [--overrides=DIR] [--export=DIR] [--no-audio]
 //! [--window-size=WxH] [--fullscreen|--windowed] [--ui-scale=N|auto] [--help]
 //! [CD] [WIDGET.WGT|LINK]` ([`USAGE`]), where `CD` is the game's CD: an
@@ -64,7 +64,7 @@ use crate::sound::Sound;
 const LINK_PAGE: &str = "https://doridian.github.io/GadgetGenerator/widget.html";
 
 const USAGE: &str =
-    "usage: widget [--open] [--opengfx[=DIR]] [--opensfx[=DIR]] [--opendata[=DIR]] [--overrides=DIR] [--export=DIR] [--no-audio] [--window-size=WxH] \
+    "usage: widget [--open] [--lang=en|sv] [--opengfx[=DIR]] [--opensfx[=DIR]] [--opendata[=DIR]] [--overrides=DIR] [--export=DIR] [--no-audio] [--window-size=WxH] \
 [--fullscreen|--windowed] [--ui-scale=N|auto] [--help] [CD] [WIDGET.WGT|LINK]
 
   CD               the game's CD: an ISO image or a folder with its files
@@ -79,6 +79,8 @@ const USAGE: &str =
                    puzzles, samples) instead of the CD's
   --open           no CD at all: the three packs alone (also what it does
                    when no CD is given or found)
+  --lang=en|sv     the language of the port's own packs (default: the
+                   system's); with a CD the CD's language is used
   --opengfx=DIR, --opensfx=DIR, --opendata=DIR
                    the same from a folder of that pack's layout
   --overrides=DIR  resources that replace or add to the CD's:
@@ -107,6 +109,9 @@ struct Args {
     opendata: Option<Pack>,
     /// `--open`: no CD at all, only the port's own packs.
     open: bool,
+    /// `--lang`: the language of the port's own packs (with a CD, the
+    /// CD's wins).
+    lang: Option<engine::lang::Lang>,
     /// The options to start again with on another CD (Change CD...):
     /// the ones the player gave, taken before a missing CD switches the
     /// packs on.
@@ -130,10 +135,10 @@ enum Pack {
 #[cfg(not(target_arch = "wasm32"))]
 impl Pack {
     /// The pack's files: the folder's, or `builtin`'s.
-    fn source(&self, builtin: fn() -> engine::assets::Embedded) -> Box<dyn Source> {
+    fn source(&self, builtin: impl FnOnce() -> Box<dyn Source>) -> Box<dyn Source> {
         match self {
             Pack::Dir(d) => Box::new(engine::assets::Dir(d.clone())),
-            Pack::Builtin => Box::new(builtin()),
+            Pack::Builtin => builtin(),
         }
     }
 }
@@ -184,6 +189,7 @@ fn args(mut it: impl Iterator<Item = std::ffi::OsString>) -> Args {
         opensfx: None,
         opendata: None,
         open: false,
+        lang: None,
         restart: Vec::new(),
         no_audio: false,
         window: WindowOptions {
@@ -208,6 +214,13 @@ fn args(mut it: impl Iterator<Item = std::ffi::OsString>) -> Args {
                 exit(0);
             }
             "--overrides" => a.overrides = value().map(PathBuf::from),
+            "--lang" => {
+                let v = value().unwrap_or_default();
+                a.lang = engine::lang::Lang::from_code(&v);
+                if a.lang.is_none() {
+                    fail(&format!("--lang={v}: not a language of the port's (en, sv)"));
+                }
+            }
             "--export" => a.export = value().map(PathBuf::from),
             // Its folder only after `=`: a bare `--opengfx` takes no value.
             "--opengfx" | "--opensfx" | "--opendata" => {
@@ -581,15 +594,28 @@ fn main() {
         .overrides
         .clone()
         .map(|d| Box::new(engine::assets::Dir(d)) as Box<dyn Source>);
-    let graphics = args.opengfx.as_ref().map(|p| p.source(engine::opengfx::builtin));
-    let sounds = args.opensfx.as_ref().map(|p| p.source(engine::opensfx::builtin));
-    let data = args.opendata.as_ref().map(|p| p.source(engine::opendata::builtin));
+    let lang = language(&args, cd.as_deref());
+    let graphics = args
+        .opengfx
+        .as_ref()
+        .map(|p| p.source(|| engine::opengfx::builtin_for(lang)));
+    let sounds = args
+        .opensfx
+        .as_ref()
+        .map(|p| p.source(|| Box::new(engine::opensfx::builtin())));
+    let data = args
+        .opendata
+        .as_ref()
+        .map(|p| p.source(|| Box::new(engine::opendata::builtin_for(lang))));
     let packs = engine::assets::Packs {
         graphics: graphics.as_deref(),
         sounds: sounds.as_deref(),
         data: data.as_deref(),
     };
-    let assets = load(&cd_path, cd.as_deref(), packs, overrides.as_deref());
+    let mut assets = load(&cd_path, cd.as_deref(), packs, overrides.as_deref());
+    if cd.is_none() {
+        assets.lang = lang;
+    }
     if let Some(dir) = &args.export {
         match cd::export(&assets, dir) {
             Ok(n) => println!("{n} files written to {}", dir.display()),
@@ -637,6 +663,16 @@ fn restart_options(args: &Args) -> Vec<std::ffi::OsString> {
 #[cfg(target_arch = "wasm32")]
 fn main() {
     web::main();
+}
+
+/// The language to play in: the CD's, else `--lang`'s, else the system's
+/// (the browser's), else English.
+fn language(args: &Args, cd: Option<&dyn Source>) -> engine::lang::Lang {
+    use engine::lang::Lang;
+    cd.and_then(engine::assets::cd_language)
+        .or(args.lang)
+        .or_else(|| sys_locale::get_locale().and_then(|l| Lang::from_code(&l)))
+        .unwrap_or_default()
 }
 
 /// The game's resources from `cd`, the port's own `packs` (`--opengfx`,

@@ -105,6 +105,18 @@ Widget Link (Ctrl+V) opens the one on the clipboard, natively too.
 
 The browser build: `tools/build-web.sh`, [docs/web.md](docs/web.md).
 
+## Languages
+
+The port speaks English and Swedish. With a CD it plays in the CD's
+language (the Swedish edition, Uppfinnarverkstan, as well: its puzzle
+file is read too); the port's own words, what the original took from
+Windows and what the port adds, follow it (`engine::lang`). Without a CD
+the packs come in the language chosen: `--lang=sv` (`?lang=sv` in the
+browser, whose start page has a list for it), else the system's.
+Swedish OpenWDATA is `tools/opendata/sv` (`crates/engine/opendata-sv`),
+Swedish OpenWGFX the pictures with words, `crates/engine/opengfx-sv`,
+over the English ones.
+
 ## Tools
 
 - `tools/gh`, `tools/ghidra/`: headless Ghidra setup and CLI for the decompilation.

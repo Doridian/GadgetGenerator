@@ -143,15 +143,20 @@ impl Pack {
     }
 }
 
-/// Ends the program with `code`. The browser build can't: the page
-/// shows that it stopped, and the module stops by panicking.
+/// The browser build's way to stop: a panic with this message, which the
+/// page's panic hook (`web::main`) leaves unshown, the reason already
+/// being on the page.
+#[cfg(target_arch = "wasm32")]
+const STOPPED: &str = "Gadget Generator stopped";
+
+/// Ends the program with `code`. The browser build can't: the module
+/// stops by panicking, its reason ([`fail`], [`usage_error`], `--help`'s
+/// text) left on the page.
 fn exit(code: i32) -> ! {
     #[cfg(target_arch = "wasm32")]
     {
-        if code != 0 {
-            platform::web::show_error("Gadget Generator stopped; the console (F12) says why.");
-        }
-        panic!("Gadget Generator stopped ({code})");
+        let _ = code;
+        std::panic::panic_any(STOPPED);
     }
     #[cfg(not(target_arch = "wasm32"))]
     std::process::exit(code)
@@ -211,6 +216,8 @@ fn args(mut it: impl Iterator<Item = std::ffi::OsString>) -> Args {
         match key.as_str() {
             "--help" | "-h" => {
                 println!("{USAGE}");
+                #[cfg(target_arch = "wasm32")]
+                platform::web::show_status(USAGE, false);
                 exit(0);
             }
             "--overrides" => a.overrides = value().map(PathBuf::from),
@@ -327,6 +334,35 @@ impl Workshop {
         }
     }
 
+    /// Settings ▸ Play without the CD: from now on the game starts on the
+    /// port's own packs, in the language chosen for them (the settings
+    /// file's, else the system's), until another CD is picked; natively
+    /// the CD here or picked before is set aside, in the browser the page
+    /// reloads without the stored image (kept, for Change CD...).
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::unused_self))]
+    fn play_without_cd(&mut self) {
+        #[cfg(target_arch = "wasm32")]
+        web::play_without_cd();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            pick::play_without();
+            let exe = std::env::current_exe();
+            let started = exe.and_then(|exe| {
+                std::process::Command::new(exe)
+                    .args(&self.options)
+                    .arg("--open")
+                    .spawn()
+            });
+            match started {
+                Ok(_) => self.done = true,
+                Err(e) => pick::error_box(&engine::lang::trf(
+                    "Gadget Generator didn't start again: {}",
+                    &[&e.to_string()],
+                )),
+            }
+        }
+    }
+
     /// Settings ▸ Change CD..., the widget saved or let go: natively the
     /// player picks another CD image (or drops it on the window where
     /// there's no file dialog, `pick`) and the game starts again on it;
@@ -393,6 +429,9 @@ impl App for Workshop {
         }
         if let Some(lang) = self.editor.take_change_lang() {
             self.change_lang(lang);
+        }
+        if self.editor.take_play_without_cd() {
+            self.play_without_cd();
         }
         if let Some(on) = self.editor.take_enhanced()
             && let Some(path) = &self.settings_file
@@ -652,7 +691,13 @@ fn main() {
     };
     let mut assets = load(&cd_path, cd.as_deref(), packs, overrides.as_deref());
     if cd.is_none() {
-        assets.lang = lang;
+        // A data pack from a folder says its own language (its word for
+        // Cancel): the parts reckon in it, whatever the system's.
+        let own = matches!(args.opendata, Some(Pack::Dir(_)))
+            .then(|| assets.string(0xf221))
+            .flatten()
+            .and_then(|w| engine::lang::Lang::of_cancel(&w));
+        assets.lang = own.unwrap_or(lang);
     }
     if let Some(dir) = &args.export {
         match cd::export(&assets, dir) {

@@ -98,6 +98,41 @@ function size(n) {
 // image stored (Settings > Change CD...).
 const CHANGE = "widget-workshop-change-cd";
 
+// The mark that the player chose to play without the CD (Settings ▸ Play
+// without the CD, or the start form's link), kept until a CD is started.
+const NO_CD = "widget-workshop-no-cd";
+
+function storage(f) {
+  try {
+    return f();
+  } catch (e) {
+    console.error("storage:", e);
+    return null;
+  }
+}
+
+// The page's query without `open` and `lang=`: the player's other
+// options, which the reloads here keep, as they keep the widget link.
+function options() {
+  return location.search.replace(/[?&](open|lang=[^&]*)(?=&|$)/g, "").replace(/^&/, "?");
+}
+
+// The page's query to play without the CD, in `lang` if given, the
+// player's other options kept.
+function withoutCd(lang) {
+  const q = options();
+  return `${q && q !== "?" ? q + "&open" : "?open"}${lang ? `&lang=${lang}` : ""}`;
+}
+
+// A visit after playing without the CD goes on without it, in the
+// language it names, else the one picked last: the address gets `open`
+// and `lang=` before the game reads it.
+if (storage(() => localStorage.getItem(NO_CD)) !== null && !/[?&]open(&|$)/.test(location.search)) {
+  const asked = /[?&]lang=([^&]*)/.exec(location.search);
+  const lang = asked ? asked[1] : storage(() => localStorage.getItem("widget-workshop-lang"));
+  history.replaceState(null, "", `${withoutCd(lang)}${location.hash}`);
+}
+
 // The start form's words in Swedish and French, for a browser in either.
 // French puts a no-break space ( ) before ":".
 const SV = {
@@ -177,10 +212,10 @@ function formLanguage($) {
     console.error("storage:", e);
   }
   lang.value = picked || (words ? browser : "en");
+  open.onclick = () => storage(() => localStorage.setItem(NO_CD, "1"));
   const follow = () => {
     // The page's own options and widget link stay, the language changed.
-    const q = location.search.replace(/[?&]lang=[^&]*/g, "").replace(/^&/, "?");
-    open.href = `${q && q !== "?" ? q + "&open" : "?open"}&lang=${lang.value}${location.hash}`;
+    open.href = `${withoutCd(lang.value)}${location.hash}`;
     try {
       localStorage.setItem("widget-workshop-lang", lang.value);
     } catch (e) {
@@ -202,15 +237,20 @@ export function changeLang(code) {
   location.search = `?open&lang=${code}`;
 }
 
+// Settings ▸ Play without the CD: the page again without it, and so on
+// later visits until a CD is started; the stored image is kept.
+export function playWithoutCd() {
+  storage(() => localStorage.setItem(NO_CD, "1"));
+  location.search = withoutCd(storage(() => localStorage.getItem("widget-workshop-lang")));
+}
+
 // Reloads the page into the start form, the stored image kept: Start
-// without picking another goes on with it.
+// without picking another goes on with it. The player's options and the
+// widget link stay; playing without the CD doesn't.
 export function changeCd() {
-  try {
-    sessionStorage.setItem(CHANGE, "1");
-  } catch (e) {
-    console.error("storage:", e);
-  }
-  location.reload();
+  storage(() => sessionStorage.setItem(CHANGE, "1"));
+  storage(() => localStorage.removeItem(NO_CD));
+  location.search = options();
 }
 
 // Resolves to the CD image: the stored one at once, else (or after
@@ -253,6 +293,7 @@ export async function chooseCd(error, enhanced, onEnhanced) {
   return new Promise((resolve) => {
     $("start").onclick = async () => {
       $("start").disabled = true;
+      storage(() => localStorage.removeItem(NO_CD));
       let blob = stored && stored.blob;
       const file = cd.files[0];
       const note = [];

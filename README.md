@@ -20,7 +20,10 @@ for `WIDGET.HLP`. It's a non-matching decompilation of the Win95 build's
 the same bytes. The stack is winit, wgpu and cpal, with a resizable
 window, fullscreen and UI scaling.
 
-This repository contains **no game data files or original code**.
+This repository contains **no game data files or original code**, and
+none of the game's prose: the packs' texts, help, puzzles and samples
+are written anew; only names, presets and short words of the interface
+may match the original's ([Legal](#legal)).
 Without the game's CD the port runs on its own free replacements:
 OpenWGFX (the pictures and pointers), OpenWSFX (the sounds) and
 OpenWDATA (the texts, dialogs, help, puzzles and sample widgets), built
@@ -51,9 +54,11 @@ Every push to main builds the port for every platform
 (`.github/workflows/build.yml`); a `v*` tag publishes them on its release:
 
 - `gadget-generator-x86_64.AppImage`, `gadget-generator-aarch64.AppImage`,
-  the same as `.deb` and `.rpm` packages, and the bare program in
-  `gadget-generator-linux-x86_64.tar.gz` / `-aarch64` (built on Ubuntu
-  22.04: glibc 2.35 or newer)
+  the same as `.deb` and `.rpm` packages
+  (`sudo apt install ./gadget-generator-x86_64.deb` on Debian and Ubuntu,
+  `sudo dnf install ./gadget-generator-x86_64.rpm` on Fedora), and the
+  bare program in `gadget-generator-linux-x86_64.tar.gz` / `-aarch64`
+  (built on Ubuntu 22.04: glibc 2.35 or newer)
 - `gadget-generator-windows-x86_64.exe`, `gadget-generator-windows-arm64.exe`
   (the C runtime linked in)
 - `gadget-generator-macos.dmg`: `Gadget Generator.app`, for Apple silicon and
@@ -170,7 +175,8 @@ file is read too); the port's own words, what the original took from
 Windows and what the port adds, follow it (`engine::lang`). Without a CD
 the packs come in the language chosen: `--lang=sv` or `--lang=fr`
 (`?lang=sv`, `?lang=fr` in the browser, whose start page has a list for
-it), else the system's. Swedish OpenWDATA is `tools/opendata/sv`
+it), else the one picked in Options ▸ Settings, else the system's.
+Swedish OpenWDATA is `tools/opendata/sv`
 (`crates/engine/opendata-sv`), Swedish OpenWGFX the pictures with words,
 `crates/engine/opengfx-sv`, over the English ones; French OpenWDATA is
 `tools/opendata/fr` (`crates/engine/opendata-fr`) and French OpenWGFX
@@ -202,3 +208,11 @@ it), else the system's. Swedish OpenWDATA is `tools/opendata/sv`
 The port's code is under the AGPL-3.0-or-later ([LICENSE](LICENSE)).
 Widget Workshop is © Maxis; Gadget Generator is an unofficial port, and no
 game data is included.
+
+Nor is the game's prose: the parts' descriptions and tips, the messages,
+the help, the puzzles and the samples in OpenWDATA are written anew, in
+English, Swedish and French alike. OpenWDATA keeps the numbers the code
+and saved widgets rely on (where the knots are, the dialogs' layouts and
+ids, the palette), so that widgets made with the original work the same;
+the parts' plain names, the drop-down lists' presets and short words of
+the interface (OK, Cancel, Open...) may match the original's.

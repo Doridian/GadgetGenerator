@@ -170,6 +170,7 @@ fn sv(en: &str) -> Option<&'static str> {
         }
         "&Contents" => "&Innehåll",
         "&Index" => "&Register",
+        "I&ndex" => "Re&gister",
         "&Back" => "&Tillbaka",
         "&Print" => "Skriv &ut",
         "Windows Help" => "Windows Hjälp",
@@ -317,6 +318,7 @@ fn fr(en: &str) -> Option<&'static str> {
         }
         "&Contents" => "&Sommaire",
         "&Index" => "&Index",
+        "I&ndex" => "I&ndex",
         "&Back" => "&Précédent",
         "&Print" => "&Imprimer",
         "Windows Help" => "Aide de Windows",

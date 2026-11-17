@@ -666,7 +666,7 @@ Lägg till en eller två delar i taget, tryck på START, kontrollera att de fung
 Ett tryck är ett klick, och ett finger som hålls stilla på en del öppnar dess inställningar, som ett dubbelklick gör. I webbläsaren kommer tangentbordet fram när du trycker på en ruta att skriva i. Vänd telefonen på sidan för en större verkstad, och slå på **Helskärm** i [Alternativ > Inställningar](#settings-window).
 
 = Om Gadget Generator {#about}
-keywords: om, tack, licens, AGPL, Maxis, Doridian, gustavn64, upphovsrätt, version
+keywords: om, tack, licens, AGPL, Maxis, Doridian, gustavn64, upphovsrätt, version, LGPL, OFL, typsnitt
 
 **Gadget Generator** är en port av **Widget Workshop: A Mad Scientist's Laboratory**, uppfinnarleksaken som Maxis gav ut 1995 (på svenska Uppfinnarverkstan, på franska Eurêka, le Laboratoire du savant fou). Den för verkstaden till dagens datorer - Linux, Windows, macOS och webbläsaren - så att originalets uppfinningar och pussel fortsätter att fungera.
 
@@ -674,7 +674,7 @@ keywords: om, tack, licens, AGPL, Maxis, Doridian, gustavn64, upphovsrätt, vers
 Gadget Generator är Doridians port av Widget Workshop (github.com/Doridian/GadgetGenerator), som återskapade hur spelet fungerar. Dess egna bilder (OpenWGFX), ljud (OpenWSFX) och data (OpenWDATA: texterna, inställningsfönstren, pusslen, exempeluppfinningarna och den här hjälpen), som gör att den går utan originalskivan, är gjorda av gustavn64.
 
 ## Licens
-Gadget Generator är fri programvara under GNU Affero General Public License, version 3 eller senare (AGPL-3.0-or-later). Dess egna bilder, ljud och data har samma licens. Du får använda, studera, dela och ändra den enligt villkoren i licensen.
+Gadget Generator är fri programvara under GNU Affero General Public License, version 3 eller senare (AGPL-3.0-or-later). Dess egna bilder, ljud och data har samma licens. Du får använda, studera, dela och ändra den enligt villkoren i licensen. Typsnitten som följer med har egna licenser: MS Sans Serif och Small Fonts, från Wine, har GNU Lesser General Public License, version 2.1 eller senare, och Widget Sans, gjort av Liberation Sans, har SIL Open Font License 1.1.
 
 ## Widget Workshop
 Widget Workshop är (c) Maxis, och namnet är ett varumärke som tillhör sina ägare. Gadget Generator är ett inofficiellt projekt som inte är gjort, godkänt eller stött av Maxis eller Electronic Arts, och det innehåller inget av originalspelets data. För att använda originalets bilder och ljud behöver du en egen kopia av skivan.

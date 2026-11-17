@@ -96,7 +96,10 @@ message boxes are dragged whole, not as an outline.
 Alt+Enter do (on a phone, where there are no such keys).
 Its **Change CD...** button, after "Save changes?", picks another CD
 image and starts the game again on it (in the browser, the page's start
-form comes back).
+form comes back); **Play without the CD** starts it again on the port's
+own packs, and it stays without a CD, on later starts too, until Change
+CD... picks one (the browser keeps the stored image meanwhile). The
+packs then come in the language picked before, else the system's.
 
 Widgets travel as links too ([docs/web.md](docs/web.md#widget-links)):
 File ▸ Copy Link to Widget puts one on the clipboard, which opens the

@@ -47,15 +47,24 @@ Mac/PC CD's own fonts (`WIN31/SVGA`) are there, they win.
 
 ## Packages
 
-Every push builds the port as one file per platform
+Every push to main builds the port for every platform
 (`.github/workflows/build.yml`); a `v*` tag publishes them on its release:
 
-- `gadget-generator-x86_64.AppImage`, `gadget-generator-aarch64.AppImage`
-  (built on Ubuntu 22.04: glibc 2.35 or newer)
-- `gadget-generator-windows-x86_64.exe` (the C runtime linked in)
+- `gadget-generator-x86_64.AppImage`, `gadget-generator-aarch64.AppImage`,
+  the same as `.deb` and `.rpm` packages, and the bare program in
+  `gadget-generator-linux-x86_64.tar.gz` / `-aarch64` (built on Ubuntu
+  22.04: glibc 2.35 or newer)
+- `gadget-generator-windows-x86_64.exe`, `gadget-generator-windows-arm64.exe`
+  (the C runtime linked in)
 - `gadget-generator-macos.dmg`: `Gadget Generator.app`, for Apple silicon and
   Intel (signed ad hoc only: the first start needs a right click, Open)
-- `gadget-generator-web.zip`: the browser build, as on the Pages site
+- `gadget-generator-web.zip`: the browser build, as on the Pages site, also
+  as a container image serving it:
+  `docker run -p 8080:80 ghcr.io/doridian/gadgetgenerator`, then
+  <http://localhost:8080/>
+
+What each package is and how a release is made:
+[packaging/README.md](packaging/README.md).
 
 None of them carries game data. Started without a CD (from its icon) and
 with no `.iso` or `orig` in the working directory, the port runs on its

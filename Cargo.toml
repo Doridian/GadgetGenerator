@@ -6,6 +6,8 @@ members = ["crates/formats", "crates/platform", "crates/engine", "crates/widget"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 publish = false
+homepage = "https://doridian.github.io/GadgetGenerator/"
+repository = "https://github.com/Doridian/GadgetGenerator"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

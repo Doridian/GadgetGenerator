@@ -5,6 +5,8 @@ description = "Gadget Generator, the executable"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [dependencies]
 engine = { path = "../engine" }
@@ -42,3 +44,40 @@ winresource = "0.1"
 
 [lints]
 workspace = true
+
+# The Linux packages (cargo-deb, cargo-generate-rpm; the CI's linux job):
+# the program, its desktop entry and icon, the licence and the README.
+[package.metadata.deb]
+name = "gadget-generator"
+maintainer = "Doridian <git@doridian.net>"
+copyright = "Doridian and the Gadget Generator contributors"
+license-file = ["../../LICENSE", "0"]
+section = "games"
+priority = "optional"
+extended-description = """\
+A decompilation and native port of Widget Workshop: A Mad Scientist's \
+Laboratory (Maxis, 1995), with its own graphics, sounds and data, so it \
+runs without the original CD; with the CD it can use the original's \
+instead."""
+depends = "$auto"
+assets = [
+    ["target/release/widget", "usr/bin/", "755"],
+    ["res/gadget-generator.desktop", "usr/share/applications/", "644"],
+    ["res/icon.png", "usr/share/icons/hicolor/512x512/apps/gadget-generator.png", "644"],
+    ["../../README.md", "usr/share/doc/gadget-generator/README.md", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "gadget-generator"
+summary = "A decompilation and native port of Maxis' Widget Workshop"
+url = "https://doridian.github.io/GadgetGenerator/"
+assets = [
+    { source = "target/release/widget", dest = "/usr/bin/widget", mode = "755" },
+    { source = "res/gadget-generator.desktop", dest = "/usr/share/applications/gadget-generator.desktop", mode = "644" },
+    { source = "res/icon.png", dest = "/usr/share/icons/hicolor/512x512/apps/gadget-generator.png", mode = "644" },
+    { source = "../../README.md", dest = "/usr/share/doc/gadget-generator/README.md", mode = "644", doc = true },
+    { source = "../../LICENSE", dest = "/usr/share/licenses/gadget-generator/LICENSE", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.requires]
+alsa-lib = "*"

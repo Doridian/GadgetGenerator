@@ -303,15 +303,36 @@ jobs:
       - id: image
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
+      # A release v1.2.3 is :1.2.3, :1.2 and :latest; the labels tie the
+      # package to this repository (its page shows the description and the
+      # README, and the workflow may push to it).
+      - id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=Gadget Generator
+            org.opencontainers.image.description=Gadget Generator in the browser: a decompilation and native port of Widget Workshop, served by nginx. No game data: bring the CD image or play without it.
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          annotations: |
+            org.opencontainers.image.title=Gadget Generator
+            org.opencontainers.image.description=Gadget Generator in the browser: a decompilation and native port of Widget Workshop, served by nginx. No game data: bring the CD image or play without it.
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+
       - uses: docker/build-push-action@v7
         with:
           context: .
           file: packaging/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          tags: |
-            ${{ steps.image.outputs.name }}:${{ github.ref_name }}
-            ${{ steps.image.outputs.name }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

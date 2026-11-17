@@ -11,7 +11,7 @@ and publishes on a release (a tag `v*`). None of it carries the CD's data.
 | The release | `gadget-generator-windows-x86_64.exe`, `gadget-generator-windows-arm64.exe` | CI |
 | The release | `gadget-generator-macos.dmg` (Apple silicon and Intel) | CI |
 | The release | `gadget-generator-web.zip`: the site, as on GitHub Pages | CI (`docs/web.md`) |
-| ghcr.io | `ghcr.io/doridian/gadgetgenerator`: the site served by nginx | CI (`docker/Dockerfile`) |
+| ghcr.io | `ghcr.io/doridian/gadgetgenerator` (`:latest`, `:X.Y.Z`, `:X.Y`): the site served by nginx, linked to this repository | CI (`docker/Dockerfile`) |
 | Nix | `nix run github:Doridian/GadgetGenerator` | `flake.nix` |
 
 ## A release

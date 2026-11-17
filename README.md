@@ -62,7 +62,8 @@ Every push to main builds the port for every platform
 - `gadget-generator-windows-x86_64.exe`, `gadget-generator-windows-arm64.exe`
   (the C runtime linked in)
 - `gadget-generator-macos.dmg`: `Gadget Generator.app`, for Apple silicon and
-  Intel (signed ad hoc only: the first start needs a right click, Open)
+  Intel (signed ad hoc only, so macOS blocks the first start; then System
+  Settings ▸ Privacy & Security ▸ Open Anyway lets it run)
 - `gadget-generator-web.zip`: the browser build, as on the Pages site, also
   as a container image serving it:
   `docker run -p 8080:80 ghcr.io/doridian/gadgetgenerator`, then

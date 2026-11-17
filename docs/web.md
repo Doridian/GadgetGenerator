@@ -105,12 +105,21 @@ Settings ▸ **Full screen** does the same in the browser.
 
 ## Storage
 
-`web.js` keeps everything in the browser's IndexedDB (database
+`web.js` keeps the files in the browser's IndexedDB (database
 `widget-workshop`, the port's name before it was renamed): the CD image
 as the `Blob` the file input gave (IndexedDB keeps it without reading it into memory), and the port's own
 files, mounted at `/storage` (`platform::storage::WEB_STORAGE`): the
 widgets the player saves, `WIDGET.INI` (the solved puzzles) and
 `settings.ini`. The editor's file dialogs start and stay there.
+
+Three small marks are kept outside it:
+`localStorage["widget-workshop-lang"]`, the language the start form's
+list (or Settings ▸ Language) picked for playing without the CD;
+`localStorage["widget-workshop-no-cd"]`, set when the player chose to
+play without the CD, so that later visits do so too until a CD is
+started from the form; and `sessionStorage["widget-workshop-change-cd"]`,
+which Change CD... sets for the reload into the start form, and the form
+clears.
 
 Widgets also come and go as files of the player's (`editor::download`):
 

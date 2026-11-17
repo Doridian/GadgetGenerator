@@ -86,7 +86,9 @@ every resource there in that layout and quits). On Linux the sound needs
 ALSA's headers to build (`libasound2-dev`).
 
 Options ▸ Settings, the port's own, changes the UI scale on the spot
-(Automatic, or 1× to 4× in quarters) and switches the port's
+(Automatic, or 1× to 4× in quarters), the language without a CD (with
+one, the CD's decides; the widget on the worksheet stays, a puzzle is
+loaded again in the new language), and switches the port's
 enhancements of the original on or off, all of them at once. They're
 on until the player turns them off (`original=true` in the settings
 file). The enhancements: the parts tray shows a whole folder at once, its pages one

@@ -324,7 +324,10 @@ impl Workshop {
             });
             match started {
                 Ok(_) => self.done = true,
-                Err(e) => pick::error_box(&format!("Gadget Generator didn't start again: {e}")),
+                Err(e) => pick::error_box(&engine::lang::trf(
+                    "Gadget Generator didn't start again: {}",
+                    &[&e.to_string()],
+                )),
             }
         }
     }
@@ -361,7 +364,10 @@ impl Workshop {
                 self.done = true;
                 Ok(())
             }
-            Err(e) => Err(format!("Gadget Generator didn't start again: {e}")),
+            Err(e) => Err(engine::lang::trf(
+                "Gadget Generator didn't start again: {}",
+                &[&e.to_string()],
+            )),
         }
     }
 }
@@ -596,7 +602,7 @@ fn main() {
     std::panic::set_hook(Box::new(move |info| {
         report(info);
         if !std::io::IsTerminal::is_terminal(&std::io::stderr()) {
-            pick::error_box(&format!("Gadget Generator stopped: {info}"));
+            pick::error_box(&engine::lang::trf("Gadget Generator stopped: {}", &[&info.to_string()]));
         }
     }));
     let mut args = args(std::env::args_os().skip(1));

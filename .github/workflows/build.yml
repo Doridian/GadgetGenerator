@@ -70,6 +70,7 @@ jobs:
           doc=AppDir/usr/share/doc/gadget-generator
           mkdir -p $doc
           cp LICENSE README.md $doc/
+          mkdir -p $doc/fonts && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt $doc/fonts/
           cp crates/widget/res/icon.png gadget-generator.png
           # the window, the GPU and the sound are the host's (dlopen'd, or
           # linuxdeploy's excludelist: libasound, libGL, libvulkan)
@@ -96,6 +97,7 @@ jobs:
           t=gadget-generator-linux-$a
           mkdir $t
           cp target/release/widget LICENSE README.md $t/
+          mkdir $t/fonts && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt $t/fonts/
           tar czf $t.tar.gz $t
 
       - uses: actions/upload-artifact@v7
@@ -186,6 +188,7 @@ jobs:
           done
           iconutil -c icns gadget-generator.iconset -o "$c/Resources/gadget-generator.icns"
           cp LICENSE README.md "$c/Resources/"
+          mkdir -p "$c/Resources/fonts" && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt "$c/Resources/fonts/"
           otool -L "$c/MacOS/widget"
           lipo -info "$c/MacOS/widget"
           codesign --force --deep -s - "$app"
@@ -238,6 +241,7 @@ jobs:
           d=gadget-generator-web
           cp -r _site $d
           cp LICENSE README.md $d/
+          mkdir $d/fonts && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt $d/fonts/
           zip -r $d.zip $d
 
       - uses: actions/upload-artifact@v7

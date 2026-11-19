@@ -73,27 +73,6 @@ fn fonts() -> Vec<Font> {
     vec![f(20, 0), f(20, 1), f(20, 2), f(28, 1), f(22, 1)]
 }
 
-/// `s` in Windows-1252, with what it hasn't as `?`.
-fn ansi(s: &str) -> Vec<u8> {
-    s.chars()
-        .map(|c| match u32::from(c) {
-            c @ (0..0x80 | 0xa0..0x100) => u8::try_from(c).unwrap_or(b'?'),
-            _ => CP1252_HIGH
-                .iter()
-                .position(|&h| h == c)
-                .and_then(|i| u8::try_from(0x80 + i).ok())
-                .unwrap_or(b'?'),
-        })
-        .collect()
-}
-
-/// Windows-1252's 0x80 to 0x9f (`'\0'` where it has none): the help's
-/// typography and the letters French needs (œ).
-const CP1252_HIGH: [char; 32] = [
-    '€', '\0', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\0', 'Ž', '\0', //
-    '\0', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\0', 'ž', 'Ÿ',
-];
-
 fn slug(title: &str) -> String {
     title.to_lowercase().split_whitespace().collect::<Vec<_>>().join("-")
 }
@@ -115,7 +94,7 @@ fn inline(text: &str, base: u16, ids: &BTreeMap<String, u32>) -> Result<Vec<Inli
     let push = |out: &mut Vec<Inline>, s: &str, font: u16, link: Option<Link>| {
         if !s.is_empty() {
             out.push(Inline::Text {
-                text: ansi(s),
+                text: crate::cp1252::encode(s),
                 font,
                 link,
             });
@@ -298,7 +277,7 @@ pub fn parse(text: &str) -> Result<HelpFile, Error> {
                     ..ParaFormat::default()
                 },
                 items: vec![Inline::Text {
-                    text: ansi(&t.title),
+                    text: crate::cp1252::encode(&t.title),
                     font: TITLE,
                     link: None,
                 }],
@@ -328,12 +307,6 @@ pub fn parse(text: &str) -> Result<HelpFile, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn writes_windows_text() {
-        assert_eq!(ansi("cœur « é » – …"), b"c\x9cur \xab \xe9 \xbb \x96 \x85");
-        assert_eq!(ansi("Œ€ア"), b"\x8c\x80?");
-    }
 
     const DOC: &str = "title: Test Help\n\n= Contents\nSee [wires](#wires) and **bold** *it*.\n\n= Wires {#wires}\nkeywords: knot, cable\n\n## Making one\n- drag from a knot\n- let go on another\n";
 

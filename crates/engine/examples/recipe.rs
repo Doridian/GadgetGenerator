@@ -154,14 +154,12 @@ fn build(assets: &Assets, recipe: &str, file: &Path) -> (Document, Option<String
 
 /// Recipes in `dir`, in name order.
 fn recipes(dir: &Path) -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map(|rd| {
-            rd.flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|x| x == "txt"))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir).map_or_default(|rd| {
+        rd.flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+            .collect()
+    });
     v.sort();
     v
 }

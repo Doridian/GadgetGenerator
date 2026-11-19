@@ -653,9 +653,9 @@ impl Dialog {
 
     /// Fills the controls from `s` (the base slot 0x48, `0x41ea4d`).
     fn fill(&mut self, s: &Settings) {
-        for g in 0..self.groups().min(4) {
+        for (g, &r) in s.radios.iter().enumerate().take(self.groups()) {
             let members = self.group(g);
-            let v = usize::from(s.radios[g]);
+            let v = usize::from(r);
             for (k, &i) in members.iter().enumerate() {
                 self.controls[i].checked = k == v.min(members.len().saturating_sub(1));
             }
@@ -693,9 +693,10 @@ impl Dialog {
     /// Reads the controls into `s` (`0x41e851`); `font` wraps a multi-line
     /// field as it shows.
     fn read(&self, s: &mut Settings, font: Option<&formats::fnt::Font>) {
-        for g in 0..self.groups().min(4) {
+        let groups = self.groups();
+        for (g, r) in s.radios.iter_mut().enumerate().take(groups) {
             if let Some(k) = self.group(g).iter().position(|&i| self.controls[i].checked) {
-                s.radios[g] = u8::try_from(k).unwrap_or(0);
+                *r = u8::try_from(k).unwrap_or(0);
             }
         }
         let combos: Vec<usize> = self.of_kind(|c| matches!(c, Ctl::Combo { .. })).collect();

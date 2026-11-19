@@ -944,8 +944,7 @@ impl<A: App> Runner<A> {
             .options
             .settings_file
             .as_deref()
-            .map(WindowSettings::load)
-            .unwrap_or_default();
+            .map_or_default(WindowSettings::load);
         self.ui = self.options.ui_scale.or(saved.ui_scale).unwrap_or_default();
         // By default the desktop is 800×600: at a fixed UI scale that many
         // pixels times the scale, else that many points.
@@ -1041,10 +1040,7 @@ impl<A: App> Runner<A> {
             WindowEvent::DroppedFile(path) if self.app.dropped_path(&path) => {}
             WindowEvent::DroppedFile(path) => match std::fs::read(&path) {
                 Ok(data) => self.app.dropped(DroppedFile {
-                    name: path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default(),
+                    name: path.file_name().map_or_default(|n| n.to_string_lossy().into_owned()),
                     path: Some(path),
                     data,
                 }),

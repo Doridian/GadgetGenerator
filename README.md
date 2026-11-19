@@ -73,20 +73,24 @@ the port's own (`tools/make-icon.py`).
 ## Running
 
 ```sh
-cargo run --release -p widget                       # the .iso here, else orig/
+cargo run --release -p widget                       # the .iso here, else orig/, else no CD
 cargo run --release -p widget -- CD.iso MY.WGT      # a CD and a widget to open
 cargo run --release -p widget -- CD.iso 'https://…/widget.html#w=…'   # a widget link
 cargo run --release -p widget -- --help
 ```
 
-Options: `--no-audio`, `--window-size=WxH`, `--fullscreen`, `--windowed`,
+Options: `--open`, `--opengfx`, `--opensfx` and `--opendata`
+([below](#without-the-cd-openwgfx-openwsfx-openwdata)), `--lang=en|sv|fr`,
+`--no-audio`, `--window-size=WxH`, `--fullscreen`, `--windowed`,
 `--ui-scale=N|auto` (remembered in the settings file), `--overrides=DIR`
 (resources that replace or add to the CD's) and `--export=DIR` (writes
 every resource there in that layout and quits). On Linux the sound needs
 ALSA's headers to build (`libasound2-dev`).
 
 Options ▸ Settings, the port's own, changes the UI scale on the spot
-(Automatic, or 1× to 4× in quarters) and switches the port's
+(Automatic, or 1× to 4× in quarters), the language without a CD (with
+one, the CD's decides; the widget on the worksheet stays, a puzzle is
+loaded again in the new language), and switches the port's
 enhancements of the original on or off, all of them at once. They're
 on until the player turns them off (`original=true` in the settings
 file). The enhancements: the parts tray shows a whole folder at once, its pages one
@@ -96,7 +100,13 @@ message boxes are dragged whole, not as an outline.
 Alt+Enter do (on a phone, where there are no such keys).
 Its **Change CD...** button, after "Save changes?", picks another CD
 image and starts the game again on it (in the browser, the page's start
-form comes back).
+form comes back); **Play without the CD** starts it again on the port's
+own packs, and it stays without a CD, on later starts too, until Change
+CD... picks one (the browser keeps the stored image meanwhile). The
+packs then come in the language picked before, else the system's.
+
+On a touch screen a tap is a click, a long press a double click, and a
+tap on a text field opens the device's own text box (in the browser).
 
 Widgets travel as links too ([docs/web.md](docs/web.md#widget-links)):
 File ▸ Copy Link to Widget puts one on the clipboard, which opens the
@@ -104,6 +114,54 @@ widget in the browser build for anyone with the CD, and File ▸ Open
 Widget Link (Ctrl+V) opens the one on the clipboard, natively too.
 
 The browser build: `tools/build-web.sh`, [docs/web.md](docs/web.md).
+
+## Without the CD: OpenWGFX, OpenWSFX, OpenWDATA
+
+The port has its own pictures (OpenWGFX), sounds (OpenWSFX) and data
+(OpenWDATA: the dialogs, menus, messages, the parts' texts and tables,
+the help, puzzles and sample widgets), built into the program, as OpenTTD
+has OpenGFX, OpenSFX and OpenMSX. Started with no CD given or found (or
+with `--open`) it runs on them alone; with a CD, `--opengfx`, `--opensfx`
+and `--opendata` use them instead of the CD's parts one at a time (in the
+browser `?open`, `?opengfx`, ...). Every part, toolbar, pointer, dialog
+and sound keeps the original's size, number and job (the knots where the
+wires plug in, the places the digits are drawn, the dialogs' controls),
+so widgets made with the original open and work the same; the pictures
+are drawn, the sounds synthesized and the texts, help, puzzles and
+samples written anew. The game has no music besides its intro, which the
+port leaves out, so there is no music set.
+
+```sh
+cargo run --release -p widget                         # no CD here: the packs alone
+cargo run --release -p widget -- --open               # the packs even with a CD here
+cargo run --release -p widget -- --opengfx --opensfx CD.iso   # the CD's data, own pictures and sounds
+cargo run --release -p widget -- --opengfx=DIR CD.iso # a pack from a folder
+```
+
+The packs are in `crates/engine/opengfx`, `crates/engine/opensfx` and
+`crates/engine/opendata`; how they're made, their layout and rules:
+[tools/opengfx/README.md](tools/opengfx/README.md),
+[tools/opensfx/README.md](tools/opensfx/README.md),
+[tools/opendata/README.md](tools/opendata/README.md).
+
+## Languages
+
+The port speaks English, Swedish and French: as far as is known, the
+languages Widget Workshop itself came out in, as Widget Workshop: A Mad
+Scientist's Laboratory, Uppfinnarverkstan and Eurêka, le Laboratoire du
+savant fou. (If you know of another edition, please say so in an
+issue.) With a CD it plays in the
+CD's language (the Swedish edition, Uppfinnarverkstan, and the French
+one, Eurêka, le Laboratoire du savant fou, as well: the Swedish puzzle
+file is read too); the port's own words, what the original took from
+Windows and what the port adds, follow it (`engine::lang`). Without a CD
+the packs come in the language chosen: `--lang=sv` or `--lang=fr`
+(`?lang=sv`, `?lang=fr` in the browser, whose start page has a list for
+it), else the system's. Swedish OpenWDATA is `tools/opendata/sv`
+(`crates/engine/opendata-sv`), Swedish OpenWGFX the pictures with words,
+`crates/engine/opengfx-sv`, over the English ones; French OpenWDATA is
+`tools/opendata/fr` (`crates/engine/opendata-fr`) and French OpenWGFX
+`crates/engine/opengfx-fr`.
 
 ## Tools
 

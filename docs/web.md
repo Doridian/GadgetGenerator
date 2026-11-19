@@ -9,13 +9,13 @@ the files and the clock differ.
 ## Building
 
 Needs the `wasm32-unknown-unknown` target and the `wasm-bindgen` CLI in
-the version the crates pin (`wasm-bindgen = "=0.2.129"` in
+the version the crates pin (`wasm-bindgen = "=0.2.130"` in
 `crates/widget/Cargo.toml` and `crates/platform/Cargo.toml`; the CLI
 refuses a module from another version):
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo install wasm-bindgen-cli --version 0.2.129
+cargo install wasm-bindgen-cli --version 0.2.130
 tools/build-web.sh            # release build into web/
 tools/build-web.sh --debug    # quicker to build, slow to run
 ```
@@ -49,18 +49,37 @@ python3 -m http.server -d web 8000    # then open http://localhost:8000/
 ```
 
 On the first start the page asks for the game's CD image: the Mac/PC CD's
-`.iso` or the OS/2 CD's `WW1_01A.ISO`. **Play without the CD** (the
-query `?open`) skips it: the game runs on the port's own packs,
-OpenWGFX, OpenWSFX and OpenWDATA, built into the module. **Start** reads
-the image into memory and opens the editor. Later starts skip the form
-and open the editor on the image it kept. Options ▸ Settings ▸ **Change
-CD...** (after "Save changes?") reloads the page into the form, which
-shows the kept image: **Start** goes on with it, picking another file
-replaces it. The form's **Enhancements** box is the Settings window's
-(on unless turned off), kept in the browser's `settings.ini` the moment
-it's ticked or unticked, so it holds for Play without the CD too. If
-the kept image no longer reads or opens, the form asks for one again. The page never fetches or sends the CD's data: the image
-comes from the player.
+`.iso` (the Swedish and French editions' too) or the OS/2 CD's
+`WW1_01A.ISO`. **Play without the CD** (the query `?open`) skips it: the
+game runs on the port's own packs, OpenWGFX, OpenWSFX and OpenWDATA,
+built into the module. **Start** reads the image into memory and opens
+the editor. Later starts skip the form and open the editor on the image
+it kept. Options ▸ Settings ▸ **Change CD...** (after "Save changes?")
+reloads the page into the form, which shows the kept image: **Start**
+goes on with it, picking another file replaces it. The form's
+**Enhancements** box is the Settings window's (on unless turned off),
+kept in the browser's `settings.ini` the moment it's ticked or unticked,
+so it holds for Play without the CD too. If the kept image no longer
+reads or opens, the form asks for one again. The page never fetches or
+sends the CD's data: the image comes from the player.
+
+Playing without the CD lasts: after the form's **Play without the CD**
+or Options ▸ Settings ▸ **Play without the CD**, later visits go on
+without it too, the stored image kept but unused, until a CD is started
+from the form (Change CD... brings the form back). The packs then come
+in the language picked before, else the browser's; the CD's language
+isn't kept for them. The page's other options and its widget link stay
+through these reloads.
+
+The form and the page's other words (the hint to turn a phone, the
+status line, a touch screen's text box) are in the browser's language
+if the port speaks it, English otherwise, and once the game starts in
+the game's; the form's list picks the language **Play without the CD**
+starts in (`?open&lang=`), remembered in the browser's `localStorage`.
+Settings ▸ Language switches the game at once, without reloading the
+page: the address becomes `?open&lang=` (its other options and its
+hash kept, `history.replaceState`), so that a reload or a bookmark plays
+in that language too, and the choice is remembered the same way.
 
 A browser won't let a page play sound before a click or key press: the
 `AudioContext` is resumed on every click or key press
@@ -159,7 +178,9 @@ The page's query string takes the command line's options without their
 `--`: `?no-audio`, `?ui-scale=2`, `?open` (no CD), `?opengfx`,
 `?opensfx` and `?opendata` (the port's own graphics, sounds and data
 with the CD, the built-in packs; a folder after `=` means nothing
-there). A `.WGT` name opens that widget from the storage
+there), `?lang=en`, `?lang=sv` or `?lang=fr` (the packs' language
+without a CD; else the one Settings ▸ Language picked, else the
+browser's). A `.WGT` name opens that widget from the storage
 (`?MYWIDGET.WGT`). `--overrides`, `--export` and the window's size mean
 nothing there. A bad option stops the page with the reason shown at the
 bottom. What the port would print on the terminal goes to

@@ -3,11 +3,16 @@
 //! and the one switch for all of the port's enhancements of the original
 //! ([`super::tray`]'s whole-folder tray, windows dragged whole). The host keeps both
 //! ([`super::Editor::take_ui_scale`], [`super::Editor::take_enhanced`]).
+//! Without a CD the language button switches the game to the next
+//! language at once ([`super::Editor::take_change_lang`]).
 //! Change CD... asks the host for another CD image
-//! ([`super::Editor::take_change_cd`]).
+//! ([`super::Editor::take_change_cd`]); Play without the CD starts the
+//! game again on the port's own packs, and keeps to them
+//! ([`super::Editor::take_play_without_cd`]).
 
 use crate::assets::Assets;
 use crate::gfx::{IRect, Surface};
+use crate::lang::{Lang, tr, trf};
 
 use super::dialog::{CAPTION_H, FRAME, check_mark, close_box, draw_window};
 use super::ui;
@@ -34,12 +39,27 @@ const CHECK_H: i32 = 16;
 /// The enhancements' note under their switch.
 const NOTE: &str = "The parts tray shows a whole folder at once; windows drag whole.";
 
+/// The parts a letter presses: their labels' underlined letters.
+const MNEMONIC_PARTS: [(Part, &str); 6] = [
+    (Part::Auto, "&Automatic (the display's)"),
+    (Part::Enhanced, "&Enhancements"),
+    (Part::FullScreen, "&Full screen"),
+    (Part::Language, "&Language:"),
+    (Part::ChangeCd, "&Change CD..."),
+    (Part::NoCd, "Play &without the CD"),
+];
+
 /// What an input did.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Outcome {
     None,
     Scale(Scale),
     Enhanced(bool),
+    /// Another language (without a CD): the game switches to it at once.
+    Language(Lang),
+    /// Play without the CD: the game starts again on the port's own
+    /// packs, and keeps to them until another CD is picked.
+    PlayWithoutCd,
     /// Full screen on or off.
     FullScreen(bool),
     /// Change CD...: the window closes and the host picks another.
@@ -56,19 +76,23 @@ enum Part {
     Smaller,
     Bigger,
     Enhanced,
+    Language,
     FullScreen,
     ChangeCd,
+    NoCd,
 }
 
-const PARTS: [Part; 8] = [
+const PARTS: [Part; 10] = [
     Part::Close,
     Part::CloseBox,
     Part::Auto,
     Part::Smaller,
     Part::Bigger,
     Part::Enhanced,
+    Part::Language,
     Part::FullScreen,
     Part::ChangeCd,
+    Part::NoCd,
 ];
 
 /// The window.
@@ -78,11 +102,27 @@ pub struct SettingsBox {
     pub scale: Scale,
     pub current: f64,
     pub enhanced: bool,
+    /// The language played in, and what decides it: only the player's
+    /// choice can be changed here. The language button goes round the
+    /// languages, each press switching to the next.
+    pub lang: Lang,
+    pub lang_from: LangFrom,
     /// Whether the window is full screen.
     pub full_screen: bool,
     window: IRect,
     /// The part the mouse holds down.
     pressed: Option<Part>,
+}
+
+/// What decides the language the game plays in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LangFrom {
+    /// The player, in this window: the port's own packs, built in.
+    Player,
+    /// The CD's own.
+    Cd,
+    /// A data pack from a folder, its words being in it (no CD).
+    Pack,
 }
 
 /// `s` one step bigger (`up`) or smaller, in whole steps from 1 to 4.
@@ -110,6 +150,14 @@ impl SettingsBox {
         enhanced: bool,
         full_screen: bool,
     ) -> SettingsBox {
+        let lang = assets.lang;
+        let lang_from = if assets.from_cd() {
+            LangFrom::Cd
+        } else if assets.lang_from_pack {
+            LangFrom::Pack
+        } else {
+            LangFrom::Player
+        };
         let h = Self::height(assets);
         let window = IRect::sized(
             area.x0 + (area.width() - W) / 2,
@@ -121,14 +169,32 @@ impl SettingsBox {
             scale,
             current,
             enhanced,
+            lang,
+            lang_from,
             full_screen,
             window,
             pressed: None,
         }
     }
 
+    /// The window again on `assets` (the game switched to another
+    /// language): their language, its words' height, the same corner.
+    #[must_use]
+    pub fn relaid(&self, assets: &Assets) -> SettingsBox {
+        let mut b = SettingsBox::new(
+            assets,
+            self.window,
+            self.scale,
+            self.current,
+            self.enhanced,
+            self.full_screen,
+        );
+        b.move_to((self.window.x0, self.window.y0));
+        b
+    }
+
     fn note(assets: &Assets) -> Vec<String> {
-        ui::font(assets).map_or_else(Vec::new, |f| ui::wrap(f, NOTE, W - 2 * FRAME - 2 * MARGIN - 17))
+        ui::font(assets).map_or_else(Vec::new, |f| ui::wrap(f, tr(NOTE), W - 2 * FRAME - 2 * MARGIN - 17))
     }
 
     fn height(assets: &Assets) -> i32 {
@@ -150,6 +216,10 @@ impl SettingsBox {
             + MARGIN
             + BUTTON_H
             + MARGIN
+            + BUTTON_H
+            + MARGIN
+            + BUTTON_H
+            + MARGIN
     }
 
     /// The client area's top left.
@@ -161,7 +231,8 @@ impl SettingsBox {
     }
 
     /// The rectangles: the UI scale's group, its check box, −, the value,
-    /// +, the enhancements' check box, full screen's, Change CD..., Close.
+    /// +, the enhancements' check box, full screen's, the language's
+    /// button, Play without the CD, Change CD..., Close.
     fn layout(&self, assets: &Assets) -> Layout {
         let lh = ui::font(assets).map_or(13, |f| i32::from(f.height));
         let (x, y) = self.client();
@@ -182,6 +253,8 @@ impl SettingsBox {
             BUTTON_H,
         );
         let change_cd = IRect::sized(x, close.y0, CHANGE_W, BUTTON_H);
+        let no_cd = IRect::sized(x, close.y0 - MARGIN - BUTTON_H, inner, BUTTON_H);
+        let language = IRect::sized(x, no_cd.y0 - MARGIN - BUTTON_H, inner, BUTTON_H);
         Layout {
             group,
             auto,
@@ -189,8 +262,10 @@ impl SettingsBox {
             value,
             bigger,
             enhanced,
+            language,
             full_screen,
             change_cd,
+            no_cd,
             close,
         }
     }
@@ -203,8 +278,10 @@ impl SettingsBox {
             Part::Smaller => l.smaller,
             Part::Bigger => l.bigger,
             Part::Enhanced => l.enhanced,
+            Part::Language => l.language,
             Part::FullScreen => l.full_screen,
             Part::ChangeCd => l.change_cd,
+            Part::NoCd => l.no_cd,
         }
     }
 
@@ -221,6 +298,9 @@ impl SettingsBox {
         match p {
             Part::Smaller => self.shown() > MIN_SCALE,
             Part::Bigger => self.shown() < MAX_SCALE,
+            Part::Language => self.lang_from == LangFrom::Player,
+            // Only with a CD: without one the game is on the packs.
+            Part::NoCd => self.lang_from == LangFrom::Cd,
             _ => true,
         }
     }
@@ -247,10 +327,18 @@ impl SettingsBox {
                 self.enhanced = !self.enhanced;
                 Outcome::Enhanced(self.enhanced)
             }
+            Part::Language => {
+                // The next language, round.
+                let all = Lang::ALL;
+                let i = all.iter().position(|&l| l == self.lang).unwrap_or(0);
+                self.lang = all[(i + 1) % all.len()];
+                Outcome::Language(self.lang)
+            }
             // The check box follows the window, as the host says
             // (`Editor::set_full_screen`): a browser may refuse.
             Part::FullScreen => Outcome::FullScreen(!self.full_screen),
             Part::ChangeCd => Outcome::ChangeCd,
+            Part::NoCd => Outcome::PlayWithoutCd,
         }
     }
 
@@ -290,13 +378,21 @@ impl SettingsBox {
     pub fn key(&mut self, vk: u16) -> Outcome {
         let part = match vk {
             0x0d | 0x1b => Part::Close,
-            0x41 => Part::Auto,
-            0x45 => Part::Enhanced,
-            0x46 => Part::FullScreen,
-            0x43 => Part::ChangeCd,
             0x6d | 0xbd => Part::Smaller,
             0x6b | 0xbb => Part::Bigger,
-            _ => return Outcome::None,
+            // The check boxes' and Change CD's underlined letters, in the
+            // language shown.
+            _ => {
+                let c = char::from(u8::try_from(vk).unwrap_or(0)).to_ascii_lowercase();
+                let Some(part) = MNEMONIC_PARTS
+                    .into_iter()
+                    .find(|(_, label)| ui::mnemonic(tr(label)).map(|m| m.to_ascii_lowercase()) == Some(c))
+                    .map(|(p, _)| p)
+                else {
+                    return Outcome::None;
+                };
+                part
+            }
         };
         self.act(part)
     }
@@ -305,22 +401,29 @@ impl SettingsBox {
         let Some(font) = ui::font(assets) else { return };
         let l = self.layout(assets);
         let pressed = |k: Part| self.pressed == Some(k);
-        draw_window(s, font, self.window, "Settings", pressed(Part::CloseBox));
+        draw_window(s, font, self.window, tr("Settings"), pressed(Part::CloseBox));
         // The group box: an etched frame with its title on it.
         let g = l.group;
         ui::edge(s, g, ui::SHADOW, ui::LIGHT);
         ui::edge(s, g.inset(1), ui::LIGHT, ui::SHADOW);
-        let title = "UI scale";
-        let tr = IRect::sized(
+        let title = tr("UI scale");
+        let title_r = IRect::sized(
             g.x0 + 8,
             g.y0 - i32::from(font.height) / 2,
             ui::width(font, title) + 4,
             i32::from(font.height),
         );
-        s.fill(tr, ui::FACE);
-        ui::label(s, font, tr.x0 + 2, tr.y0, title, ui::BLACK);
+        s.fill(title_r, ui::FACE);
+        ui::label(s, font, title_r.x0 + 2, title_r.y0, title, ui::BLACK);
         let auto = self.scale == Scale::Auto;
-        check(s, font, l.auto, "&Automatic (the display's)", auto, pressed(Part::Auto));
+        check(
+            s,
+            font,
+            l.auto,
+            tr("&Automatic (the display's)"),
+            auto,
+            pressed(Part::Auto),
+        );
         for (k, r, text) in [(Part::Smaller, l.smaller, "-"), (Part::Bigger, l.bigger, "+")] {
             ui::button(s, font, r, text, pressed(k), false, self.enabled(k));
         }
@@ -338,7 +441,7 @@ impl SettingsBox {
             s,
             font,
             l.enhanced,
-            "&Enhancements",
+            tr("&Enhancements"),
             self.enhanced,
             pressed(Part::Enhanced),
         );
@@ -347,11 +450,25 @@ impl SettingsBox {
             ui::label(s, font, l.enhanced.x0 + 17, y, &line, ui::BLACK);
             y += i32::from(font.height);
         }
+        let language = if self.lang_from == LangFrom::Cd {
+            trf("Language: the CD's ({})", &[self.lang.name()])
+        } else {
+            format!("{} {}", tr("&Language:"), self.lang.name())
+        };
+        ui::button(
+            s,
+            font,
+            l.language,
+            &language,
+            pressed(Part::Language),
+            false,
+            self.enabled(Part::Language),
+        );
         check(
             s,
             font,
             l.full_screen,
-            "&Full screen",
+            tr("&Full screen"),
             self.full_screen,
             pressed(Part::FullScreen),
         );
@@ -359,12 +476,21 @@ impl SettingsBox {
             s,
             font,
             l.change_cd,
-            "&Change CD...",
+            tr("&Change CD..."),
             pressed(Part::ChangeCd),
             false,
             true,
         );
-        ui::button(s, font, l.close, "Close", pressed(Part::Close), true, true);
+        ui::button(
+            s,
+            font,
+            l.no_cd,
+            tr("Play &without the CD"),
+            pressed(Part::NoCd),
+            false,
+            self.enabled(Part::NoCd),
+        );
+        ui::button(s, font, l.close, tr("Close"), pressed(Part::Close), true, true);
     }
 }
 
@@ -375,8 +501,10 @@ struct Layout {
     value: IRect,
     bigger: IRect,
     enhanced: IRect,
+    language: IRect,
     full_screen: IRect,
     change_cd: IRect,
+    no_cd: IRect,
     close: IRect,
 }
 
@@ -410,10 +538,14 @@ mod tests {
 
     #[test]
     fn keys_and_switches() {
+        // The underlined letters are the English labels'.
+        crate::lang::set(Lang::En);
         let mut b = SettingsBox {
             scale: Scale::Auto,
             current: 2.0,
             enhanced: true,
+            lang: Lang::En,
+            lang_from: LangFrom::Player,
             full_screen: false,
             window: IRect::default(),
             pressed: None,
@@ -429,6 +561,23 @@ mod tests {
         assert_eq!(b.key(0x46), Outcome::FullScreen(false));
         b.scale = Scale::Fixed(1.0);
         assert_eq!(b.key(0x6d), Outcome::None, "− is greyed at 1×");
+        // The language goes round, each press switching at once; closing
+        // only closes.
+        assert_eq!(b.key(0x4c), Outcome::Language(Lang::Sv));
+        assert_eq!(b.lang, Lang::Sv);
+        assert_eq!(b.key(0x4c), Outcome::Language(Lang::Fr));
+        assert_eq!(b.lang, Lang::Fr);
+        assert_eq!(b.key(0x4c), Outcome::Language(Lang::En));
+        assert_eq!(b.key(0x1b), Outcome::Close);
+        assert_eq!(b.key(0x57), Outcome::None, "no CD to leave");
+        b.lang_from = LangFrom::Pack;
+        assert_eq!(b.key(0x4c), Outcome::None, "a data folder's language stays");
+        assert_eq!(b.key(0x57), Outcome::None, "no CD to leave");
+        assert_eq!(b.lang, Lang::En);
+        b.lang_from = LangFrom::Cd;
+        assert_eq!(b.key(0x4c), Outcome::None, "a CD's language stays");
+        assert_eq!(b.lang, Lang::En);
+        assert_eq!(b.key(0x57), Outcome::PlayWithoutCd);
         assert_eq!(b.key(0x43), Outcome::ChangeCd);
         assert_eq!(b.key(0x1b), Outcome::Close);
     }

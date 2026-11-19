@@ -30,6 +30,7 @@ pub mod worksheet;
 pub use download::{Download, Dropped};
 pub use links::Links;
 
+use crate::lang::{tr, trf};
 use formats::cursor::Cursor as CursorPic;
 use formats::pe::{RT_CURSOR, RT_GROUP_CURSOR};
 
@@ -60,7 +61,7 @@ const DOUBLE_CLICK_MS: u64 = 500;
 const DOUBLE_CLICK_D: i32 = 2;
 /// The title of message boxes (`AfxMessageBox`).
 const APP: &str = "Gadget Generator";
-/// The document's default name (string 2).
+/// The document's default name when string 2 hasn't one.
 const UNTITLED: &str = "untitled.wgt";
 
 /// The Label's tag (`TxLb`).
@@ -207,6 +208,17 @@ enum Drag {
     Help,
 }
 
+/// The editor's seven pointers (groups 5007..5013).
+fn cursors(assets: &Assets) -> Vec<Option<CursorPic>> {
+    (0..7)
+        .map(|i| {
+            let group = assets.get(Module::Exe, RT_GROUP_CURSOR, 5007 + i)?;
+            let id = formats::cursor::group_first(group)?;
+            CursorPic::parse(assets.get(Module::Exe, RT_CURSOR, u32::from(id))?)
+        })
+        .collect()
+}
+
 /// The outline of a window dragged to `r` (`0x430172`): four 2-pixel
 /// inverted strips.
 fn outline(r: IRect) -> Vec<IRect> {
@@ -262,6 +274,9 @@ enum Next {
     /// Settings ▸ Change CD...: the host picks another CD and starts
     /// over.
     ChangeCd,
+    /// Settings ▸ Play without the CD: the host starts over without one,
+    /// and keeps to that until another CD is picked.
+    PlayWithoutCd,
 }
 
 /// The editor, drawn into an 8-bit surface.
@@ -369,21 +384,20 @@ pub struct Editor {
     new_enhanced: Option<bool>,
     /// Change CD... was pressed, and the widget saved or let go.
     change_cd: bool,
+    /// Another language was chosen, for the host to switch to.
+    change_lang: Option<crate::lang::Lang>,
+    /// Play without the CD was pressed, and the widget saved or let go.
+    play_without_cd: bool,
 }
 
 impl Editor {
     #[must_use]
     pub fn new(assets: Assets, doc: Document, width: u32, height: u32) -> Editor {
+        // The port's own words in the game's language.
+        crate::lang::set(assets.lang);
         let pictures = Pictures::default();
         let tray = Tray::new(&assets, &pictures);
-        let menu = Menu::load(&assets);
-        let cursors = (0..7)
-            .map(|i| {
-                let group = assets.get(Module::Exe, RT_GROUP_CURSOR, 5007 + i)?;
-                let id = formats::cursor::group_first(group)?;
-                CursorPic::parse(assets.get(Module::Exe, RT_CURSOR, u32::from(id))?)
-            })
-            .collect();
+        let cursors = cursors(&assets);
         let mut e = Editor {
             assets,
             doc,
@@ -419,7 +433,7 @@ impl Editor {
             alt_alone: false,
             undo: None,
             dirty: false,
-            menu,
+            menu: Menu::default(),
             prompt: None,
             dialog: None,
             about: None,
@@ -450,10 +464,12 @@ impl Editor {
             new_scale: None,
             new_enhanced: None,
             change_cd: false,
+            change_lang: None,
+            play_without_cd: false,
         };
         let limits = e.doc.tray_limits.clone();
         e.tray.apply_limits(&limits);
-        e.menu.add_settings();
+        e.menu = e.load_menu();
         e.update_menu();
         e
     }
@@ -911,7 +927,21 @@ impl Editor {
             .and_then(|p| std::path::Path::new(p).file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .or_else(|| self.drop_name.clone())
-            .unwrap_or_else(|| UNTITLED.to_owned())
+            .unwrap_or_else(|| self.untitled())
+    }
+
+    /// A new document's name: the document template's (string 2, MFC's
+    /// `docName`, "untitled.wgt", the Swedish CD's "namnlos.wgt").
+    fn untitled(&self) -> String {
+        self.assets
+            .string(2)
+            .and_then(|t| {
+                t.split('\n')
+                    .map(str::trim)
+                    .find(|f| f.to_ascii_lowercase().ends_with(".wgt"))
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(|| tr(UNTITLED).to_owned())
     }
 
     /// Alert `n` (string `8000 + n`, `0x410b5b`).
@@ -928,8 +958,13 @@ impl Editor {
     /// Open and Load Puzzle drop a puzzle's changes without asking; Exit
     /// asks (`0x417027`).
     fn confirm_save(&mut self, next: Next) {
-        if self.dirty && (matches!(next, Next::Exit | Next::ChangeCd) || !self.puzzle.active) {
-            let text = format!("Save changes to {}?", self.display_name());
+        if self.dirty && (matches!(next, Next::Exit | Next::ChangeCd | Next::PlayWithoutCd) || !self.puzzle.active) {
+            // MFC's own words (`AFX_IDP_ASK_TO_SAVE`, string 0xf103).
+            let name = self.display_name();
+            let text = self
+                .assets
+                .string(0xf103)
+                .map_or_else(|| trf("Save changes to {}?", &[&name]), |t| t.replace("%1", &name));
             self.message(
                 &text,
                 &[Answer::Yes, Answer::No, Answer::Cancel],
@@ -952,6 +987,7 @@ impl Editor {
             Next::Exit => self.finished = true,
             Next::Dropped => self.open_dropped(),
             Next::ChangeCd => self.change_cd = true,
+            Next::PlayWithoutCd => self.play_without_cd = true,
         }
     }
 
@@ -1193,7 +1229,7 @@ impl Editor {
             Some(file) => {
                 self.help = Some(help::Help::new(&self.assets, file, self.worksheet(), self.help_at));
             }
-            _ => self.message(help::MISSING, &[Answer::Retry, Answer::Cancel], Then::HelpMissing),
+            _ => self.message(tr(help::MISSING), &[Answer::Retry, Answer::Cancel], Then::HelpMissing),
         }
     }
 
@@ -1232,10 +1268,10 @@ impl Editor {
     fn fit_work_area(&mut self) {
         let e = worksheet::extents(&self.doc);
         if e.is_empty() {
-            self.message("Nothing to fit", &[Answer::Ok], Then::Nothing);
+            self.message(tr("Nothing to fit"), &[Answer::Ok], Then::Nothing);
         } else if e.x0 >= 15 && e.y0 >= 15 && e.x1 <= 625 && e.y1 <= 465 {
             self.message(
-                "Your widget is already fit to any Windows screen",
+                tr("Your widget is already fit to any Windows screen"),
                 &[Answer::Ok],
                 Then::Nothing,
             );
@@ -1992,6 +2028,78 @@ impl Editor {
         std::mem::take(&mut self.change_cd)
     }
 
+    /// The language the player chose in the Settings window (without a
+    /// CD), once: the host builds the port's own packs in it and hands
+    /// them over at once ([`Editor::set_assets`]).
+    pub fn take_change_lang(&mut self) -> Option<crate::lang::Lang> {
+        self.change_lang.take()
+    }
+
+    /// The game's resources replaced by `assets`, everything else kept:
+    /// Settings ▸ Language, without a CD, the host having built the port's
+    /// own packs in the language chosen ([`Editor::take_change_lang`]).
+    /// The port's words, the menu, the tray, the help and the Settings
+    /// window come in the new language at once. The widget stays the
+    /// player's, its words too, with its name, its modified flag and its
+    /// undo step, only read again with the new resources; a puzzle the
+    /// player hasn't changed comes again from the new puzzle file, its
+    /// words being the game's (Undo brings back the one left), and one
+    /// they have stays theirs like any widget. A running widget stops
+    /// first.
+    pub fn set_assets(&mut self, assets: Assets) {
+        self.stop();
+        self.doc.tray_limits = self.tray.limits();
+        let saved = self.doc.save();
+        let untouched = self.puzzle.active
+            && self.puzzle_doc(self.puzzle.number).is_some_and(|mut d| {
+                d.tray_limits.clone_from(&self.doc.tray_limits);
+                d.save() == saved
+            });
+        crate::lang::set(assets.lang);
+        self.assets = assets;
+        self.pictures = Pictures::default();
+        self.cursors = cursors(&self.assets);
+        self.menu = self.load_menu();
+        self.tray.set_assets(&self.assets, &self.pictures);
+        self.sel = Sel::None;
+        let puzzle = untouched.then(|| self.puzzle_doc(self.puzzle.number)).flatten();
+        if let Some(doc) = puzzle {
+            self.undo = Some(saved);
+            self.put_puzzle(doc);
+        } else if let Ok(doc) = Document::load(&self.assets, &saved) {
+            self.doc = doc;
+        }
+        if let Some(h) = self.help.take() {
+            let area = self.worksheet();
+            match self.assets.help.as_deref().and_then(help::load) {
+                Some(file) => self.help = Some(h.reopened(&self.assets, file, area)),
+                None => self.help_at = Some(h.placement()),
+            }
+        }
+        self.settings = self.settings.take().map(|b| b.relaid(&self.assets));
+        self.update_menu();
+    }
+
+    /// The menu bar from the resources, with the port's own items.
+    fn load_menu(&self) -> Menu {
+        let mut menu = Menu::load(&self.assets);
+        if self.download.is_some() {
+            menu.add_downloads();
+        }
+        if self.links.is_some() {
+            menu.add_links();
+        }
+        menu.add_settings();
+        menu
+    }
+
+    /// Whether the player chose to play without the CD (Settings ▸ Play
+    /// without the CD), once, after "Save changes?": the host starts over
+    /// on the port's own packs and keeps to that.
+    pub fn take_play_without_cd(&mut self) -> bool {
+        std::mem::take(&mut self.play_without_cd)
+    }
+
     /// The window is full screen or not (the Settings window shows it).
     pub fn set_full_screen(&mut self, on: bool) {
         self.full_screen = on;
@@ -2062,9 +2170,14 @@ impl Editor {
                 self.set_enhanced(on);
                 self.new_enhanced = Some(on);
             }
+            settings::Outcome::Language(l) => self.change_lang = Some(l),
             settings::Outcome::ChangeCd => {
                 self.settings = None;
                 self.confirm_save(Next::ChangeCd);
+            }
+            settings::Outcome::PlayWithoutCd => {
+                self.settings = None;
+                self.confirm_save(Next::PlayWithoutCd);
             }
             settings::Outcome::Close => self.settings = None,
         }
@@ -2691,5 +2804,7 @@ fn floating(doc: &Document, dragged: Option<usize>, w: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod file_tests;
+#[cfg(test)]
+mod lang_tests;
 #[cfg(test)]
 mod tests;

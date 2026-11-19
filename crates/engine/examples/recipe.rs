@@ -3,7 +3,11 @@
 //! (`crates/engine/opendata`: `samples/*.WGT`, `WIDGET.PZL`).
 //!
 //! `cargo run -p engine --example recipe -- tools/opendata crates/engine/opendata`
+//! `cargo run -p engine --example recipe -- --data crates/engine/opendata-sv tools/opendata/sv crates/engine/opendata-sv`
 //! `cargo run -p engine --example recipe -- --parts [TAG...]`   (the parts' knots)
+//!
+//! `--data DIR` builds against that data pack instead of the built-in
+//! English one (a language's: a fresh Billboard's text is its string).
 //!
 //! A recipe, a command a line (`#` starts a comment; text in "quotes",
 //! `\n` a line break):
@@ -26,7 +30,7 @@
 
 use std::path::{Path, PathBuf};
 
-use engine::assets::{Assets, Packs};
+use engine::assets::{Assets, Dir, Packs, Source};
 use engine::doc::{Document, new_gadget};
 use engine::gadget::Tag;
 
@@ -71,10 +75,7 @@ fn tag(s: &str) -> Tag {
 
 /// Windows-1252 bytes of `s`, line breaks as `\r\n`.
 fn ansi(s: &str) -> Vec<u8> {
-    s.replace('\n', "\r\n")
-        .chars()
-        .map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?'))
-        .collect()
+    engine::text::encode(&s.replace('\n', "\r\n"))
 }
 
 /// The widget of `recipe`, and its title.
@@ -165,14 +166,32 @@ fn recipes(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let data = engine::opendata::builtin();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let data: Box<dyn Source> = match args.iter().position(|a| a == "--data") {
+        Some(i) => {
+            if i + 1 >= args.len() {
+                eprintln!("--data needs a data pack's folder: --data DIR");
+                std::process::exit(2);
+            }
+            let dir = args.remove(i + 1);
+            args.remove(i);
+            Box::new(Dir(PathBuf::from(dir)))
+        }
+        None => Box::new(engine::opendata::builtin()),
+    };
     let packs = Packs {
         graphics: None,
         sounds: None,
-        data: Some(&data),
+        data: Some(data.as_ref()),
     };
-    let assets = Assets::load_with(None, packs, None).unwrap();
+    let mut assets = Assets::load_with(None, packs, None).unwrap();
+    // The data pack's language (its word for Cancel), as the game takes
+    // it: new parts' words (a Label's, a Message Box's) come in it.
+    assets.lang = assets
+        .string(0xf221)
+        .and_then(|w| engine::lang::Lang::of_cancel(&w))
+        .unwrap_or_default();
+    engine::lang::set(assets.lang);
     if args.first().map(String::as_str) == Some("--parts") {
         for class in engine::gadgets::CLASSES {
             let name = String::from_utf8_lossy(&class.tag.0).into_owned();
@@ -219,7 +238,8 @@ fn main() {
         let (doc, title) = build(&assets, &std::fs::read_to_string(p).unwrap(), p);
         let title = title.unwrap_or_else(|| panic!("{}: no title", p.display()));
         println!("puzzle {}: {title}: {} parts", n + 1, doc.gadgets.len());
-        puzzles.push((i16::try_from(n + 1).unwrap(), title.into_bytes(), doc.save()));
+        // The title in Windows-1252 (formats::pzl reads it so).
+        puzzles.push((i16::try_from(n + 1).unwrap(), ansi(&title), doc.save()));
     }
     if !puzzles.is_empty() {
         let list: Vec<(i16, &[u8], &[u8])> = puzzles.iter().map(|(i, t, w)| (*i, &t[..], &w[..])).collect();

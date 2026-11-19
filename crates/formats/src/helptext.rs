@@ -73,25 +73,6 @@ fn fonts() -> Vec<Font> {
     vec![f(20, 0), f(20, 1), f(20, 2), f(28, 1), f(22, 1)]
 }
 
-/// `s` in Windows-1252, with what it hasn't as `?`.
-fn ansi(s: &str) -> Vec<u8> {
-    s.chars()
-        .map(|c| match c {
-            '\u{20ac}' => 0x80,
-            '\u{2018}' => 0x91,
-            '\u{2019}' => 0x92,
-            '\u{201c}' => 0x93,
-            '\u{201d}' => 0x94,
-            '\u{2022}' => 0x95,
-            '\u{2013}' => 0x96,
-            '\u{2014}' => 0x97,
-            '\u{2026}' => 0x85,
-            c if u32::from(c) < 0x100 => u8::try_from(u32::from(c)).unwrap_or(b'?'),
-            _ => b'?',
-        })
-        .collect()
-}
-
 fn slug(title: &str) -> String {
     title.to_lowercase().split_whitespace().collect::<Vec<_>>().join("-")
 }
@@ -113,7 +94,7 @@ fn inline(text: &str, base: u16, ids: &BTreeMap<String, u32>) -> Result<Vec<Inli
     let push = |out: &mut Vec<Inline>, s: &str, font: u16, link: Option<Link>| {
         if !s.is_empty() {
             out.push(Inline::Text {
-                text: ansi(s),
+                text: crate::cp1252::encode(s),
                 font,
                 link,
             });
@@ -296,7 +277,7 @@ pub fn parse(text: &str) -> Result<HelpFile, Error> {
                     ..ParaFormat::default()
                 },
                 items: vec![Inline::Text {
-                    text: ansi(&t.title),
+                    text: crate::cp1252::encode(&t.title),
                     font: TITLE,
                     link: None,
                 }],

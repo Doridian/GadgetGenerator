@@ -4,13 +4,41 @@
 //! for any widget (docs/puzzles.md 2.6, 3).
 
 use crate::doc::Document;
+use crate::gfx::IRect;
 use crate::puzzle::{self, Current};
 
 use super::prompt::Answer;
 use super::puzzle_dialog::{self, Outcome, PuzzleDialog};
 use super::tray::Tool;
-use super::worksheet::Sel;
+use super::worksheet::{self, Sel};
 use super::{Editor, Then};
+
+/// Where the toolbars sit as the view lays them out (`0x4340f0`): the main
+/// toolbar at (0, 0), 53×93, and the tray at (54, 0), 449×93.
+const TOOLBARS: IRect = IRect::new(0, 0, 503, 93);
+
+/// How far down a widget has to move for none of its parts and wires to
+/// lie under the toolbars (where they start, [`TOOLBARS`]): the gap
+/// between the toolbars' bottom and the highest of those that start left
+/// of the tray's right edge.
+///
+/// Some puzzles reach under the toolbars, where the original leaves them
+/// (its game moves nothing): a few of the English and French CDs', and
+/// most of the Swedish edition's, laid out higher (docs/puzzles.md 1.8).
+/// The port moves every puzzle down by this much, on purpose, so that
+/// their instructions can be read.
+#[must_use]
+pub fn below_toolbars(doc: &Document) -> i32 {
+    let gadgets = doc.gadgets.iter().map(|g| g.core.rect());
+    let wires = (0..doc.wires.len()).map(|w| worksheet::points_bbox(&worksheet::wire_points(doc, w, None)));
+    gadgets
+        .chain(wires)
+        .filter(|r| !r.is_empty() && r.x0 < TOOLBARS.x1 && r.x1 > TOOLBARS.x0)
+        .map(|r| TOOLBARS.y1 - r.y0)
+        .max()
+        .unwrap_or(0)
+        .max(0)
+}
 
 impl Editor {
     /// The puzzle loaded, if the worksheet holds one (`cPuzzle +0x12`,
@@ -58,7 +86,7 @@ impl Editor {
                 }
             }
             Outcome::Reset => self.message(
-                puzzle_dialog::RESET_QUESTION,
+                crate::lang::tr(puzzle_dialog::RESET_QUESTION),
                 &[Answer::Ok, Answer::Cancel],
                 Then::ResetPuzzles,
             ),
@@ -80,18 +108,26 @@ impl Editor {
     }
 
     /// The puzzle's widget, or alert 5 (no file) / 7 (not a widget).
-    fn puzzle_doc(&mut self, number: i16) -> Option<Document> {
+    ///
+    /// Every puzzle's widget comes down clear of the toolbars
+    /// ([`below_toolbars`]), which the original doesn't do: one that
+    /// doesn't reach under them stays where its file puts it.
+    pub(super) fn puzzle_doc(&mut self, number: i16) -> Option<Document> {
         let Some(file) = puzzle::open(&self.assets) else {
             self.alert(5);
             return None;
         };
-        let doc = file
+        let mut doc = file
             .puzzles
             .iter()
             .find(|p| p.id == number)
             .and_then(|p| Document::load(&self.assets, &p.widget).ok());
-        if doc.is_none() {
-            self.alert(7);
+        match &mut doc {
+            None => self.alert(7),
+            Some(doc) => {
+                let dy = below_toolbars(doc);
+                worksheet::offset_all(doc, (0, dy));
+            }
         }
         doc
     }
@@ -119,7 +155,7 @@ impl Editor {
         }
     }
 
-    fn put_puzzle(&mut self, doc: Document) {
+    pub(super) fn put_puzzle(&mut self, doc: Document) {
         self.stop();
         self.sel = Sel::None;
         self.doc = doc;
@@ -453,6 +489,66 @@ mod tests {
         (0..core.knots.len())
             .find(|&k| core.knots[k].wire.is_none() && core.knots[k].is_input() == input)
             .unwrap()
+    }
+
+    /// The Swedish edition's puzzles, from the CD folder `WIDGET_SV_CD`
+    /// names (skipped without it), come down clear of the toolbars: puzzle
+    /// 1's parts and labels by 72 pixels (its title label, at (172, 50),
+    /// starts 21 pixels down), and no part or wire of any puzzle lies
+    /// under the toolbars. Its own game leaves them where they are
+    /// (docs/puzzles.md 1.8).
+    #[test]
+    fn swedish_puzzles_come_down_clear_of_the_toolbars() {
+        let Some(dir) = std::env::var_os("WIDGET_SV_CD") else {
+            eprintln!("no WIDGET_SV_CD: skipped");
+            return;
+        };
+        // The Swedish game makes the port speak Swedish.
+        let assets = Assets::load(Some(&Dir(dir.into())), None).unwrap();
+        let mut e = Editor::new(assets, Document::new(), 640, 433);
+        assert!(e.load_puzzle(1));
+        let mut labels: Vec<(i32, i32)> = find(&e, *b"TxLb")
+            .iter()
+            .map(|&g| (e.doc.gadgets[g].core.h, e.doc.gadgets[g].core.v))
+            .collect();
+        labels.sort_unstable();
+        assert_eq!(labels[..4], [(51, 295), (52, 383), (58, 195), (172, 122)]);
+        let bars = e.main_bar.rect().union(e.tray.bar.rect());
+        for n in 1..=25 {
+            assert!(e.load_puzzle(n));
+            assert_eq!(below_toolbars(&e.doc), 0, "puzzle {n}");
+            assert!(
+                e.doc.gadgets.iter().all(|g| g.core.rect().intersect(bars).is_empty()),
+                "puzzle {n}"
+            );
+            // Revert loads it the same way.
+            e.revert_puzzle();
+            assert_eq!(below_toolbars(&e.doc), 0, "puzzle {n}");
+        }
+    }
+
+    /// The English CD's puzzles come down clear of the toolbars too, but
+    /// only those that reach under them (11 does); the others stay where
+    /// the file puts them.
+    #[test]
+    fn english_puzzles_come_down_only_as_far_as_needed() {
+        let Some(mut e) = editor() else { return };
+        let file = crate::puzzle::open(&e.assets).unwrap();
+        let mut moved = 0;
+        for p in &file.puzzles {
+            let doc = Document::load(&e.assets, &p.widget).unwrap();
+            assert!(e.load_puzzle(p.id));
+            assert_eq!(below_toolbars(&e.doc), 0, "puzzle {}", p.id);
+            let at = |d: &Document| -> Vec<(i32, i32)> { d.gadgets.iter().map(|g| (g.core.h, g.core.v)).collect() };
+            if below_toolbars(&doc) == 0 {
+                assert_eq!(at(&e.doc), at(&doc), "puzzle {}", p.id);
+            } else {
+                moved += 1;
+            }
+        }
+        assert!(moved > 0);
+        let eleven = Document::load(&e.assets, &file.puzzles.iter().find(|p| p.id == 11).unwrap().widget).unwrap();
+        assert!(below_toolbars(&eleven) > 0);
     }
 
     #[test]

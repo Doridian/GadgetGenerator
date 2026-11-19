@@ -19,15 +19,26 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use engine::gfx::{IRect, Surface};
+use engine::lang::{tr, trf};
 use formats::fnt::Font;
 use platform::{Cursor, Frame};
 
 /// The CD there is without asking: `default` if it's there, else the one
-/// picked before.
+/// picked before; none after Settings ▸ Play without the CD, until
+/// another is picked.
 pub fn found(default: &Path) -> Option<PathBuf> {
+    if without().is_some_and(|w| w.exists()) {
+        return None;
+    }
     if default.exists() {
         return Some(default.to_path_buf());
     }
+    picked_before()
+}
+
+/// The CD image picked before, if it's still there; kept through Play
+/// without the CD, so that Change CD... starts beside it.
+fn picked_before() -> Option<PathBuf> {
     kept()
         .and_then(|k| std::fs::read_to_string(k).ok())
         .map(|s| PathBuf::from(s.trim_end_matches(['\r', '\n'])))
@@ -39,8 +50,32 @@ fn kept() -> Option<PathBuf> {
     platform::storage::data_dir().map(|d| d.join("cd-path.txt"))
 }
 
-/// Keeps `picked` for next time.
+/// The mark that the player chose to play without the CD.
+fn without() -> Option<PathBuf> {
+    platform::storage::data_dir().map(|d| d.join("no-cd"))
+}
+
+/// Settings ▸ Play without the CD: from now on the game starts without
+/// one, a CD here or picked before, until another is picked. The one
+/// picked before is still remembered for Change CD...'s file dialog, as
+/// the browser keeps its image.
+pub fn play_without() {
+    if let Some(mark) = without() {
+        let saved = mark
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&mark, ""));
+        if let Err(e) = saved {
+            eprintln!("{}: {e}", mark.display());
+        }
+    }
+}
+
+/// Keeps `picked` for next time (and plays with a CD again).
 fn keep(picked: &Path) {
+    if let Some(mark) = without() {
+        let _ = std::fs::remove_file(mark);
+    }
     if let Some(kept) = kept() {
         let saved = kept
             .parent()
@@ -52,18 +87,32 @@ fn keep(picked: &Path) {
     }
 }
 
-/// The CD image the player picks in the system's file dialog, kept for
-/// next time. `None` if the player cancels.
+/// The CD image the player picks in the system's file dialog, which
+/// starts beside the one picked before; kept for next time. `None` if
+/// the player cancels.
 pub fn choose() -> Option<PathBuf> {
+    let before = picked_before();
     let picked = loop {
-        let path = rfd::FileDialog::new()
-            .set_title("Choose the Widget Workshop CD image")
-            .add_filter("CD image", &["iso", "ISO"])
-            .add_filter("All files", &["*"])
+        let mut dialog = rfd::FileDialog::new();
+        if let Some(b) = &before {
+            if let Some(dir) = b.parent() {
+                dialog = dialog.set_directory(dir);
+            }
+            if let Some(name) = b.file_name() {
+                dialog = dialog.set_file_name(name.to_string_lossy());
+            }
+        }
+        let path = dialog
+            .set_title(tr("Choose the Widget Workshop CD image"))
+            .add_filter(tr("CD image"), &["iso", "ISO"])
+            .add_filter(tr("All files"), &["*"])
             .pick_file()?;
         match check(&path) {
             Ok(()) => break path,
-            Err(e) => error_box(&format!("That isn't Widget Workshop's CD image ({e}). Choose another.")),
+            Err(e) => error_box(&trf(
+                "That isn't Widget Workshop's CD image ({}). Choose another.",
+                &[e.as_str()],
+            )),
         }
     };
     keep(&picked);
@@ -76,7 +125,7 @@ fn check(path: &Path) -> Result<(), String> {
     if crate::cd::has_game(cd.as_ref()) {
         Ok(())
     } else {
-        Err("no WWGADGET.DLL on it".into())
+        Err(tr("no WWGADGET.DLL on it").into())
     }
 }
 
@@ -237,7 +286,10 @@ impl DropScreen {
                 let name = path
                     .file_name()
                     .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-                self.set_error(format!("{name} isn't Widget Workshop's CD image ({e}). Drop another."));
+                self.set_error(trf(
+                    "{} isn't Widget Workshop's CD image ({}). Drop another.",
+                    &[name.as_str(), e.as_str()],
+                ));
                 false
             }
         }
@@ -289,15 +341,15 @@ impl DropScreen {
         add(
             &small,
             TEXT,
-            "Drop the game's CD image (.iso) on this window, or a folder with its files.",
+            tr("Drop the game's CD image (.iso) on this window, or a folder with its files."),
         );
         add(&small, TEXT, "");
         add(
             &small,
             DIM,
-            "There's no file dialog here to choose it with (no xdg-desktop-portal, no zenity).",
+            tr("There's no file dialog here to choose it with (no xdg-desktop-portal, no zenity)."),
         );
-        add(&small, DIM, "Esc goes back to the game.");
+        add(&small, DIM, tr("Esc goes back to the game."));
         if let Some(e) = &self.error {
             add(&small, TEXT, "");
             add(&small, ERROR, e);

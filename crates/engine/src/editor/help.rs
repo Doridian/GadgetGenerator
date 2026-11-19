@@ -18,6 +18,7 @@
 //! at 96 dpi. The pictures are the Doc-To-Help `{ewc}` windows' baggage
 //! BMPs, mapped to the game's palette.
 
+use crate::lang::{tr, trf};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -910,6 +911,10 @@ pub struct Help {
     index: Option<IndexDialog>,
     palette: [[u8; 3]; 256],
     green: u8,
+    /// The main window's colours (`|SYSTEM`'s window record), the topic's
+    /// and the non-scrolling region's: white unless the file sets them.
+    background: u8,
+    nsr_background: u8,
     pictures: Pictures,
     view: RefCell<Option<Rc<View>>>,
 }
@@ -921,17 +926,23 @@ impl Help {
     #[must_use]
     pub fn new(assets: &Assets, file: HelpFile, area: IRect, at: Option<IRect>) -> Help {
         let palette = assets.palette();
-        let title = file
+        let main = file
             .windows
             .iter()
-            .find(|w| w.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case("main")))
+            .find(|w| w.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case("main")));
+        let colour = |c: Option<formats::bmp::Rgb>| c.map_or(ui::WHITE, |c| nearest(&palette, [c.r, c.g, c.b]));
+        let (background, nsr_background) = (
+            colour(main.and_then(|w| w.background)),
+            colour(main.and_then(|w| w.non_scroll_background)),
+        );
+        let title = main
             .and_then(|w| w.caption.as_deref())
             .map(str::trim)
             .filter(|c| !c.is_empty())
             .map_or_else(
                 || {
                     if file.title.is_empty() {
-                        "Windows Help".to_owned()
+                        tr("Windows Help").to_owned()
                     } else {
                         file.title.clone()
                     }
@@ -959,11 +970,34 @@ impl Help {
             mouse: (-1, -1),
             index: None,
             green: nearest(&palette, [0, 0x80, 0]),
+            background,
+            nsr_background,
             palette,
             pictures: Pictures::default(),
             view: RefCell::new(None),
         };
         h.fit(area);
+        h
+    }
+
+    /// The window on another `file` (the game switched to another
+    /// language), where this one is, maximized or not, with the keyboard
+    /// or not. The help files go topic for topic (OpenWDATA's are written
+    /// line for line alike): the same topic is shown, with the same way
+    /// Back, if `file` has as many; else its contents.
+    #[must_use]
+    pub fn reopened(&self, assets: &Assets, file: HelpFile, area: IRect) -> Help {
+        let same = file.topics.len() == self.file.topics.len();
+        let mut h = Help::new(assets, file, area, Some(self.placement()));
+        if let Some(r) = self.restore {
+            h.restore = Some(r);
+            h.window = self.window;
+        }
+        h.active = self.active;
+        if same {
+            h.topic = self.topic;
+            h.history.clone_from(&self.history);
+        }
         h
     }
 
@@ -1544,7 +1578,7 @@ impl Help {
             0xbe if shift => self.press_button(B_NEXT),
             _ => {
                 let c = char::from(u8::try_from(vk).unwrap_or(0));
-                if let Some(b) = BUTTONS.iter().position(|b| ui::mnemonic(b) == Some(c)) {
+                if let Some(b) = BUTTONS.iter().position(|b| ui::mnemonic(tr(b)) == Some(c)) {
                     self.press_button(b);
                 }
             }
@@ -1663,11 +1697,11 @@ impl Help {
         // The button bar.
         for (i, (b, label)) in r.buttons.iter().zip(BUTTONS).enumerate() {
             let down = self.pressed == Some(Press::Button(i)) && b.contains(self.mouse.0, self.mouse.1);
-            ui::button(s, font, *b, label, down, false, self.enabled(i));
+            ui::button(s, font, *b, tr(label), down, false, self.enabled(i));
         }
         // The non-scrolling region and its line.
         if !r.nsr.is_empty() {
-            s.fill(r.nsr, ui::WHITE);
+            s.fill(r.nsr, self.nsr_background);
             let c = s.clip();
             s.set_clip(r.nsr.intersect(c));
             v.nsr.draw(s, &self.cx(assets), r.nsr.x0, r.nsr.y0);
@@ -1675,7 +1709,7 @@ impl Help {
             s.fill(IRect::new(r.nsr.x0, r.nsr.y1 - 1, r.nsr.x1, r.nsr.y1), ui::BLACK);
         }
         // The topic.
-        s.fill(r.pane, ui::WHITE);
+        s.fill(r.pane, self.background);
         let c = s.clip();
         s.set_clip(r.pane.intersect(c));
         let (ox, oy) = (r.pane.x0 - self.scroll.0, r.pane.y0 - self.scroll.1);
@@ -1811,12 +1845,21 @@ const IDX_SIZE: (i32, i32) = (380, 400);
 const ROW_H: i32 = 13;
 
 impl IndexDialog {
+    /// A file with no keywords (the Swedish edition's) lists its topics'
+    /// titles instead, as `WinHelp` 4's Find tab does before a word is typed.
     fn new(file: &HelpFile, over: IRect) -> IndexDialog {
-        let mut words: Vec<(String, u32)> = file
-            .keywords
-            .iter()
-            .filter_map(|k| Some((k.word.clone(), *k.topics.first()?)))
-            .collect();
+        let mut words: Vec<(String, u32)> = if file.keywords.is_empty() {
+            file.topics
+                .iter()
+                .filter(|t| !t.title.is_empty())
+                .map(|t| (t.title.clone(), t.offset))
+                .collect()
+        } else {
+            file.keywords
+                .iter()
+                .filter_map(|k| Some((k.word.clone(), *k.topics.first()?)))
+                .collect()
+        };
         words.sort_by_key(|(w, _)| w.to_ascii_lowercase());
         let (w, h) = IDX_SIZE;
         let window = IRect::sized(
@@ -2042,12 +2085,13 @@ impl IndexDialog {
             s,
             font,
             self.window,
-            &format!("Help Topics: {title}"),
+            &trf("Help Topics: {}", &[title]),
             self.pressed == Some(IPress::Close),
         );
         // The tab control: one tab, "Index", raised above its page.
         let page = self.page();
-        let tab_w = ui::width(font, "Index") + 16;
+        let tab_text = tr("I&ndex");
+        let tab_w = ui::width(font, &tab_text.replace('&', "")) + 16;
         let tab = IRect::new(page.x0, page.y0 - 20, page.x0 + tab_w, page.y0 + 1);
         s.fill(tab, ui::FACE);
         s.fill(IRect::new(page.x0, page.y0, page.x1, page.y1), ui::FACE);
@@ -2059,14 +2103,14 @@ impl IndexDialog {
         s.fill(IRect::new(tab.x1 - 1, tab.y0 + 2, tab.x1, page.y0), ui::DARK);
         s.fill(IRect::new(tab.x1 - 2, tab.y0 + 1, tab.x1 - 1, page.y0), ui::SHADOW);
         s.fill(IRect::new(tab.x0 + 1, page.y0, tab.x1 - 2, page.y0 + 2), ui::FACE);
-        ui::label(s, font, tab.x0 + 8, tab.y0 + 4, "I&ndex", ui::BLACK);
+        ui::label(s, font, tab.x0 + 8, tab.y0 + 4, tab_text, ui::BLACK);
         let e = self.edit();
         ui::label(
             s,
             font,
             e.x0,
             e.y0 - 18,
-            "&1  Type the first few letters of the word you're looking for.",
+            tr("&1  Type the first few letters of the word you're looking for."),
             ui::BLACK,
         );
         s.fill(e, ui::WHITE);
@@ -2079,7 +2123,7 @@ impl IndexDialog {
             font,
             l.x0,
             l.y0 - 18,
-            "&2  Click the index entry you want, and then click Display.",
+            tr("&2  Click the index entry you want, and then click Display."),
             ui::BLACK,
         );
         s.fill(l, ui::WHITE);
@@ -2112,7 +2156,7 @@ impl IndexDialog {
             s,
             font,
             self.display_button(),
-            "&Display",
+            tr("&Display"),
             self.pressed == Some(IPress::Display),
             true,
             self.sel.is_some(),
@@ -2121,7 +2165,7 @@ impl IndexDialog {
             s,
             font,
             self.cancel_button(),
-            "Cancel",
+            tr("Cancel"),
             self.pressed == Some(IPress::Cancel),
             false,
             true,

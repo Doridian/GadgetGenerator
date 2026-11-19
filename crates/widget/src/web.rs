@@ -17,6 +17,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::sync::Arc;
 
+use engine::lang::{tr, trf};
 use platform::data::{CdImage, MemoryFiles};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -38,6 +39,17 @@ extern "C" {
     /// Reloads the page into the start form, the stored image kept.
     #[wasm_bindgen(js_name = changeCd)]
     pub(crate) fn change_cd();
+    /// The game switched to the language `code` (without a CD): kept for
+    /// later visits, the page's address (`?open&lang=`) and its own words
+    /// follow, without a reload.
+    #[wasm_bindgen(js_name = changeLang)]
+    pub(crate) fn change_lang(code: &str);
+    /// Reloads the page without the CD, and keeps to that.
+    #[wasm_bindgen(js_name = playWithoutCd)]
+    pub(crate) fn play_without_cd();
+    /// Puts the page's own words (and its `lang`) in the language `code`.
+    #[wasm_bindgen(js_name = pageLanguage)]
+    fn page_language(code: &str);
     /// `blob`'s bytes from `start` to `end`, a `Uint8Array`.
     #[wasm_bindgen(js_name = readBlob)]
     fn read_blob(blob: &web_sys::Blob, start: f64, end: f64) -> js_sys::Promise;
@@ -54,7 +66,12 @@ extern "C" {
 
 /// The module's start: shows a panic on the page and starts [`run`].
 pub(crate) fn main() {
-    std::panic::set_hook(Box::new(|info| platform::web::show_error(&info.to_string())));
+    std::panic::set_hook(Box::new(|info| {
+        // `exit`'s: the reason is on the page already.
+        if info.payload().downcast_ref::<&str>() != Some(&crate::STOPPED) {
+            platform::web::show_error(&info.to_string());
+        }
+    }));
     wasm_bindgen_futures::spawn_local(async {
         if let Err(e) = run().await {
             platform::web::show_error(&e);
@@ -110,9 +127,9 @@ async fn cd_image() -> Result<Box<dyn engine::assets::Source>, String> {
             .await?
             .dyn_into()
             .map_err(|e| js_error(&e))?;
-        platform::web::show_status("Reading the CD image…", false);
+        platform::web::show_status(tr("Reading the CD image…"), false);
         error = match read(&blob).await.map(|image| CdImage::open(Box::new(image))) {
-            Err(e) => format!("The CD image didn't read: {e}."),
+            Err(e) => trf("The CD image didn't read: {}.", &[e.as_str()]),
             Ok(Ok(cd)) => {
                 let volume = cd.volume.clone();
                 let cd = crate::cd::image(cd);
@@ -120,9 +137,9 @@ async fn cd_image() -> Result<Box<dyn engine::assets::Source>, String> {
                     platform::web::log(&format!("the CD image: {volume}"));
                     return Ok(cd);
                 }
-                "That CD image isn't Widget Workshop's: it has no WWGADGET.DLL.".to_owned()
+                tr("That CD image isn't Widget Workshop's: it has no WWGADGET.DLL.").to_owned()
             }
-            Ok(Err(e)) => format!("That file doesn't open as a CD image: {e}."),
+            Ok(Err(e)) => trf("That file doesn't open as a CD image: {}.", &[e.as_str()]),
         };
         platform::web::show_status("", false);
         wait(forget_cd()).await?;
@@ -201,6 +218,11 @@ fn query_args() -> Vec<OsString> {
 }
 
 async fn run() -> Result<(), String> {
+    // The status line's words in the browser's language (the start
+    // form's are too) until the game's is known.
+    if let Some(lang) = sys_locale::get_locale().and_then(|l| engine::lang::Lang::from_code(&l)) {
+        engine::lang::set(lang);
+    }
     // `?open`: no CD, the port's own packs alone.
     let open = query_args().iter().any(|a| a == "--open");
     let files: js_sys::Array = wait(stored_files()).await?.unchecked_into();
@@ -223,7 +245,7 @@ async fn run() -> Result<(), String> {
     );
     let cd = if open { None } else { Some(cd_image().await?) };
     platform::web::show_status("", false);
-    let args = crate::args(query_args().into_iter());
+    let mut args = crate::args(query_args().into_iter());
     watch_links();
     for (given, what) in [
         (args.cd.is_some(), "a CD"),
@@ -234,16 +256,23 @@ async fn run() -> Result<(), String> {
             eprintln!("{what} means nothing in the browser");
         }
     }
-    // `?opengfx`, `?opensfx`: the built-in packs (a folder means nothing
-    // here).
-    let graphics = (open || args.opengfx.is_some()).then(engine::opengfx::builtin);
-    let sounds = (open || args.opensfx.is_some()).then(engine::opensfx::builtin);
-    let data = (open || args.opendata.is_some()).then(engine::opendata::builtin);
-    let packs = engine::assets::Packs {
-        graphics: graphics.as_ref().map(|g| g as &dyn engine::assets::Source),
-        sounds: sounds.as_ref().map(|g| g as &dyn engine::assets::Source),
-        data: data.as_ref().map(|g| g as &dyn engine::assets::Source),
-    };
-    let assets = crate::load(Path::new("CD"), cd.as_deref(), packs, None);
+    args.cd = None;
+    args.overrides = None;
+    // `?open`: the three built-in packs; `?opengfx`, `?opensfx`,
+    // `?opendata` one of them with the CD (a folder means nothing here).
+    if open {
+        args.without_cd();
+    }
+    for p in [&mut args.opengfx, &mut args.opensfx, &mut args.opendata]
+        .into_iter()
+        .flatten()
+    {
+        *p = crate::Pack::Builtin;
+    }
+    // `?lang=sv`: the packs' language (the page's choice), else the
+    // browser's; a CD's own wins.
+    let lang = crate::language(&args, cd.as_deref());
+    let assets = crate::assets_for(&args, cd.as_deref(), lang).map_err(|e| format!("CD: {e}"))?;
+    page_language(assets.lang.code());
     crate::start(&args, assets).map_err(|e| e.to_string())
 }

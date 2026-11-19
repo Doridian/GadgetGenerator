@@ -35,6 +35,25 @@ pub fn builtin() -> Embedded {
 }
 
 include!(concat!(env!("OUT_DIR"), "/opendata_files.rs"));
+include!(concat!(env!("OUT_DIR"), "/opendata-sv_files.rs"));
+include!(concat!(env!("OUT_DIR"), "/opendata-fr_files.rs"));
+
+/// The built-in pack in `lang` (`crates/engine/opendata-sv` for Swedish,
+/// `opendata-fr` for French), English where there's none or it has no
+/// resources (a folder with only its help is no pack).
+#[must_use]
+pub fn builtin_for(lang: crate::lang::Lang) -> Embedded {
+    let pack = match lang {
+        crate::lang::Lang::Sv => BUILTIN_SV,
+        crate::lang::Lang::Fr => BUILTIN_FR,
+        crate::lang::Lang::En => BUILTIN,
+    };
+    if pack.iter().any(|(path, _)| path.starts_with("WIDGET/")) {
+        Embedded::new(pack)
+    } else {
+        builtin()
+    }
+}
 
 /// What a pack gives.
 #[derive(Default)]
@@ -73,6 +92,24 @@ pub fn load(pack: &dyn Source) -> Loaded {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every language's built-in pack is whole: resources, puzzles, help
+    /// and samples, and in its own language (not English stood in).
+    #[test]
+    fn every_language_has_its_pack() {
+        for lang in crate::lang::Lang::ALL {
+            let pack = builtin_for(lang);
+            if lang != crate::lang::Lang::En {
+                let help = |p: &Embedded| p.read("HELP.TXT");
+                assert_ne!(help(&pack), help(&builtin()), "{lang:?} falls back to English");
+            }
+            let l = load(&pack);
+            assert!(l.resources.len() > 300, "{lang:?}: {} resources", l.resources.len());
+            assert!(l.puzzles.is_some() && l.help.is_some(), "{lang:?}");
+            assert_eq!(l.samples.len(), 5, "{lang:?}");
+            assert!(l.problems.is_empty(), "{lang:?}: {:?}", l.problems);
+        }
+    }
 
     /// The built-in pack has what the editor needs to start: the menu,
     /// the palette, the dialogs, the parts' tables.

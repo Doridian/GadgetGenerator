@@ -107,8 +107,9 @@ pub const RUNTIME_FILE: &str = "WIDGET.SLF";
 /// Where the sample widgets are, in the game's folder: the Win95 CD's,
 /// the OS/2 CD's.
 pub const SAMPLE_DIRS: [&str; 2] = ["FUNWIDGE", "WIDGETS"];
-/// The Windows 3.1 bitmap fonts the CD carries for its own setup.
-pub const FONT_DIR: &str = "WIN31/SVGA";
+/// Where the CD carries the Windows 3.1 bitmap fonts, for its own setup:
+/// the Mac/PC CD's, the French CD's.
+pub const FONT_DIRS: [&str; 2] = ["WIN31/SVGA", "SVGA"];
 
 /// The port's own fonts, behind the CD's: Wine's free MS Sans Serif and
 /// Small Fonts (LGPL 2.1 or later, the same metrics as Windows'), and
@@ -183,6 +184,31 @@ fn parse_module(m: Module, bytes: &[u8]) -> Result<pe::Resources, Error> {
     }
 }
 
+impl Assets {
+    /// Whether the game's own files are a CD's (not the port's packs alone).
+    #[must_use]
+    pub fn from_cd(&self) -> bool {
+        !self.modules.is_empty()
+    }
+}
+
+/// The language of the game on `cd` (its `WIDGET.EXE`'s resources), to
+/// choose the port's own packs in it before loading: English where it
+/// doesn't say (the OS/2 CD); `None` if there's no game there.
+#[must_use]
+pub fn cd_language(cd: &dyn Source) -> Option<crate::lang::Lang> {
+    let dir = game_dir(cd)?;
+    let exe = cd.read(&join(dir, Module::Exe.file()))?;
+    // A game that doesn't say (the OS/2 CD's) is the English one, as
+    // its texts are: the packs' language mustn't decide it.
+    Some(
+        parse_module(Module::Exe, &exe)
+            .ok()
+            .and_then(|m| crate::lang::Lang::of_resources(&m))
+            .unwrap_or_default(),
+    )
+}
+
 /// The port's own packs to use instead of the CD's pictures and sounds
 /// ([`Assets::load_with`]).
 #[derive(Default, Clone, Copy)]
@@ -204,6 +230,13 @@ pub struct Assets {
     /// The port's own graphics' and sounds' ([`Packs`]), between the
     /// overrides and the CD's.
     own: BTreeMap<(Module, u32, u32), Vec<u8>>,
+    /// The language of the game's words: the CD's (its resources'), else
+    /// the data pack's as the host chose it. The port's own words follow
+    /// it (`crate::lang`).
+    pub lang: crate::lang::Lang,
+    /// Whether a data pack from a folder says the language (its own words
+    /// being in it): the Settings window can't change it then.
+    pub lang_from_pack: bool,
     /// What the packs had that couldn't be used, for the host to tell.
     pub pack_problems: Vec<String>,
     /// The bitmap fonts: the overrides', the CD's, then
@@ -326,8 +359,11 @@ impl Assets {
                 self.modules.insert(m, parse_module(m, &bytes)?);
             }
         }
+        if let Some(lang) = self.modules.get(&Module::Exe).and_then(crate::lang::Lang::of_resources) {
+            self.lang = lang;
+        }
         for fon in ["SSERIFE.FON", "SMALLE.FON"].into_iter().filter(|_| cd_fonts) {
-            for d in [FONT_DIR, dir, ""] {
+            for d in FONT_DIRS.into_iter().chain([dir, ""]) {
                 if let Some(b) = cd.read(&join(d, fon)) {
                     self.fonts.extend(fnt::Font::parse_fon(&b).unwrap_or_default());
                     break;

@@ -27,6 +27,91 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 SS = 4  # supersampling
 
 # ---------------------------------------------------------------------------
+# Words. The pictures' words are drawn in LANG: "en", or "sv" for the
+# Swedish overlay pack (crates/engine/opengfx-sv, make.py --lang sv). Each
+# goes through tr(), which takes the English word to LANG's.
+
+LANG = "en"
+
+WORDS = {
+    "sv": {
+        # the main toolbar, the Stopwatch
+        "GO": "START", "STOP": "STOPP",
+        # the settings dialogs' arrows by the knots
+        "IN": "IN", "OUT": "UT",
+        # the logic gates
+        "AND": "OCH", "OR": "ELLER", "XOR": "XELLER", "NOT": "INTE",
+        # switches, the light bulb, the Sound Switch
+        "ON": "PÅ", "OFF": "AV",
+        # the tray's Text Label, the Plotter's reset
+        "Label": "Etikett", "RESET": "NOLLA",
+        # the Converter's units: m and kg as the Swedish edition writes them
+        "M": "m", "Kg": "kg", "Ft": "fot", "Lb": "lb",
+        # the Digital Clock, the Totaler, the Numeric Keypad
+        "AM": "FM", "PM": "EM",
+        "AVERAGE": "MEDEL", "TOTAL": "SUMMA", "MAXIMUM": "STÖRST", "MINIMUM": "MINST",
+        "ENTER": "RETUR",
+        # the signs
+        "KEEP\nOFF!": "BETRÄD\nEJ!", "STAY AWAY!": "HÅLL AVSTÅND!",
+        "PUSH\nTO START": "TRYCK\nFÖR START", "PUSH\nTO STOP": "TRYCK\nFÖR STOPP",
+        "PUSH": "TRYCK", "HERE": "HÄR", "ENTER\nHERE": "GÅ IN\nHÄR",
+        "THE ANSWER IS": "SVARET ÄR", "VOICE": "RÖST", "ACTIVATED": "STYRD",
+        "Mad Scientist\nat Work!": "Galen forskare\ni arbete!", "It's\nMagic!": "Det är\nmagi!",
+        # the Coin Toss
+        "HEADS": "KRONA", "TAILS": "KLAVE",
+        # the Zodiac
+        "Aquarius": "Vattumannen", "Pisces": "Fiskarna", "Aries": "Väduren", "Taurus": "Oxen",
+        "Gemini": "Tvillingarna", "Cancer": "Kräftan", "Leo": "Lejonet", "Virgo": "Jungfrun",
+        "Libra": "Vågen", "Scorpio": "Skorpionen", "Sagittarius": "Skytten", "Capricorn": "Stenbocken",
+        # the Fortune Teller
+        "No": "Nej", "Yes": "Ja", "NEVER!": "ALDRIG!", "Ask\nagain\nlater": "Fråga\nigen\nsenare",
+        "Maybe": "Kanske", "For sure": "Absolut", "Of\nCourse!": "Så\nklart!", "Not Today": "Inte\nidag",
+        # the About box
+        "for Widget Workshop": "för Widget Workshop",
+    },
+    # French, after the French edition (Eurêka, le Laboratoire du savant
+    # fou) where it put its pictures' words in French: the gates, the
+    # signs, the Coin Toss, the Zodiac, the Fortune Teller, the Totaler.
+    # Like it, GO/STOP, ON/OFF, AM/PM and the Stopwatch's START/STOP stay.
+    "fr": {
+        # the settings dialogs' arrows by the knots (3×5 letters: room for
+        # two on an input's arrow): entrée, sortie
+        "IN": "E", "OUT": "S",
+        # the logic gates
+        "AND": "ET", "OR": "OU", "XOR": "XOU", "NOT": "INV",
+        # the tray's Text Label, the Plotter's reset
+        "Label": "Étiquette", "RESET": "ZÉRO",
+        # the Converter's units (pi: pied)
+        "M": "m", "Kg": "kg", "Ft": "pi", "Lb": "lb",
+        # the Totaler, the Numeric Keypad
+        "AVERAGE": "MOYENNE", "TOTAL": "TOTAL", "MAXIMUM": "MAXIMUM", "MINIMUM": "MINIMUM",
+        "ENTER": "ENTRÉE",
+        # the signs
+        "KEEP\nOFF!": "PAS\nTOUCHE!", "STAY AWAY!": "DÉFENSE D'ENTRER!",
+        "PUSH\nTO START": "APPUIE\nPOUR LANCER", "PUSH\nTO STOP": "APPUIE\nPOUR ARRÊTER",
+        "PUSH": "APPUIE", "HERE": "ICI", "ENTER\nHERE": "ENTRE\nICI",
+        "THE ANSWER IS": "LA RÉPONSE EST", "VOICE": "VOIX", "ACTIVATED": "ACTIVÉE",
+        "Mad Scientist\nat Work!": "Savant fou\nen action!", "It's\nMagic!": "C'est\nmagique!",
+        # the Coin Toss
+        "HEADS": "FACE", "TAILS": "PILE",
+        # the Zodiac
+        "Aquarius": "Verseau", "Pisces": "Poissons", "Aries": "Bélier", "Taurus": "Taureau",
+        "Gemini": "Gémeaux", "Cancer": "Cancer", "Leo": "Lion", "Virgo": "Vierge",
+        "Libra": "Balance", "Scorpio": "Scorpion", "Sagittarius": "Sagittaire", "Capricorn": "Capricorne",
+        # the Fortune Teller
+        "No": "Non", "Yes": "Oui", "NEVER!": "JAMAIS!", "Ask\nagain\nlater": "Redemande\nplus\ntard",
+        "Maybe": "Peut-être", "For sure": "C'est sûr", "Of\nCourse!": "Bien\nsûr!", "Not Today": "Pas\naujourd'hui",
+        # the About box
+        "for Widget Workshop": "pour Widget Workshop",
+    },
+}
+
+
+def tr(word: str) -> str:
+    """`word` (English) in LANG."""
+    return WORDS.get(LANG, {}).get(word, word)
+
+# ---------------------------------------------------------------------------
 # Colours: the kit's own names, taken to the palette in the end.
 
 BLACK = (0, 0, 0)
@@ -542,8 +627,17 @@ def part_picture(tray_index: int) -> Image.Image:
 
 def pack_frame(sheet_id: int, n: int = 1) -> Image.Image | None:
     """Frame `n` of the pack's sheet `sheet_id` as drawn (RGBA), or None."""
-    p = PACK / "gadgets" / str(sheet_id) / f"{n}.png"
-    return Image.open(p).convert("RGBA") if p.exists() else None
+    for pack in (pack_dir(LANG), PACK):
+        p = pack / "gadgets" / str(sheet_id) / f"{n}.png"
+        if p.exists():
+            return Image.open(p).convert("RGBA")
+    return None
+
+
+def pack_dir(lang: str) -> Path:
+    """The pack drawn in `lang`: the English one, or an overlay of the
+    sheets whose words differ (crates/engine/opengfx-<lang>)."""
+    return PACK if lang == "en" else PACK.with_name(f"opengfx-{lang}")
 
 
 class SheetContext:

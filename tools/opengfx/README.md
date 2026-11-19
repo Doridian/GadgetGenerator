@@ -37,6 +37,7 @@ nix-shell -p 'python3.withPackages(p: [p.pillow])' dejavu_fonts liberation_ttf
 widget --export=EXPORT CD.iso          # the sizes and places, from the CD
 tools/opengfx/make.py EXPORT           # every sheet and the pointers
 tools/opengfx/make.py EXPORT 1029 1030 --preview /tmp/pv --compare
+tools/opengfx/make.py EXPORT --lang sv  # the Swedish words' sheets (below)
 ```
 
 `make.py` reads the export only for numbers: the frames' rectangles, the
@@ -61,7 +62,55 @@ go into the pack.
   pictures (the publisher's and the developer's logos, the photo) become
   the port's own.
 - Text on parts: DejaVu Sans / Liberation Sans (free), in English as the
-  game is.
+  game is; every word through `wgfx.tr()`, so that other languages can
+  have their own (below).
+
+## Other languages: the Swedish overlay
+
+The pictures with words (GO/STOP, ON/OFF, the logic gates, the signs,
+the Zodiac's names, the Fortune Teller's answers, ...) have Swedish
+versions in an overlay pack, `crates/engine/opengfx-sv`: the same layout,
+but only the sheets whose words differ, and `sheets.txt` lines for those;
+the engine takes every other sheet from the English pack. The words are
+`wgfx.WORDS["sv"]` (English to Swedish, with `\n` where a sign breaks its
+lines); `--lang sv` draws everything with them and keeps the sheets that
+come out different from the English pack's:
+
+```sh
+tools/opengfx/make.py EXPORT --lang sv
+# the tray's icons and the puzzles' pictures, from the Swedish parts:
+cargo run --release -p engine --example render_parts -- EXPORT PARTS-SV --overlay crates/engine/opengfx-sv --data crates/engine/opendata-sv --lang sv
+tools/opengfx/make.py EXPORT --lang sv --parts PARTS-SV
+```
+
+Draw the English pack first (the overlay is what differs from it). A new
+language is a new `WORDS` entry and `--lang` code; words that don't fit
+are shrunk by `text_fit`, and the pixel fonts (`TINY_FONT` in
+`sheets/chrome.py`, `GLYPHS` in `sheets/_numbers_kit.py`, `_G` in
+`sheets/_science_kit.py`) need a glyph for every letter they draw.
+
+### French
+
+`crates/engine/opengfx-fr`, made the same way with `--lang fr` (and
+`render_parts ... --overlay crates/engine/opengfx-fr --data
+crates/engine/opendata-fr --lang fr`). It follows the French edition
+(Eurêka, le Laboratoire du savant fou) where that put its pictures in
+French, in pictures of its own:
+
+| English | French | the edition |
+|---|---|---|
+| AND, OR, XOR, NOT | ET, OU, XOU, INV | the same |
+| HEADS, TAILS | FACE, PILE | the same |
+| the Zodiac's names, the Fortune Teller's answers, the signs | in French | in French |
+| AVERAGE, TOTAL, MAXIMUM, MINIMUM | MOYENNE, TOTAL, MAXIMUM, MINIMUM | MOYENNE, TOTAUX, ... |
+| RESET (the Strip Chart) | ZÉRO | REMIS A ZERO |
+| ENTER (the keypad) | ENTRÉE | |
+| M, Kg, Ft, Lb (the Converter) | m, kg, pi, lb | M, Kg, Ft, Lb |
+| IN, OUT (the settings' arrows) | E, S (entrée, sortie) | no words |
+| for Widget Workshop | pour Widget Workshop | |
+| GO/STOP, ON/OFF, AM/PM, the Stopwatch's START/STOP | kept | kept |
+
+The texts' glossary is OpenWDATA's (`tools/opendata/README.md`).
 
 ## Style
 

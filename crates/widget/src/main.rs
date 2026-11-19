@@ -107,10 +107,11 @@ struct Args {
     opendata: Option<Pack>,
     /// `--open`: no CD at all, only the port's own packs.
     open: bool,
-    /// No CD given or found: the packs were switched on for it, not by
-    /// the player (so Change CD... starts again without them).
+    /// The options to start again with on another CD (Change CD...):
+    /// the ones the player gave, taken before a missing CD switches the
+    /// packs on.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    auto_open: bool,
+    restart: Vec<std::ffi::OsString>,
     no_audio: bool,
     window: WindowOptions,
 }
@@ -124,6 +125,17 @@ enum Pack {
     Builtin,
     /// `--opengfx=DIR`: a folder of the pack's layout.
     Dir(PathBuf),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Pack {
+    /// The pack's files: the folder's, or `builtin`'s.
+    fn source(&self, builtin: fn() -> engine::assets::Embedded) -> Box<dyn Source> {
+        match self {
+            Pack::Dir(d) => Box::new(engine::assets::Dir(d.clone())),
+            Pack::Builtin => Box::new(builtin()),
+        }
+    }
 }
 
 /// Ends the program with `code`. The browser build can't: the page
@@ -172,7 +184,7 @@ fn args(mut it: impl Iterator<Item = std::ffi::OsString>) -> Args {
         opensfx: None,
         opendata: None,
         open: false,
-        auto_open: false,
+        restart: Vec::new(),
         no_audio: false,
         window: WindowOptions {
             settings_file: platform::settings::settings_file(),
@@ -279,7 +291,7 @@ impl Workshop {
         #[cfg(not(target_arch = "wasm32"))]
         if !pick::has_dialog() {
             let s = &self.editor.surface;
-            let mut screen = pick::DropScreen::new(true, self.theme.dark());
+            let mut screen = pick::DropScreen::new(self.theme.dark());
             screen.resize(
                 u32::try_from(s.width).unwrap_or(0),
                 u32::try_from(s.height).unwrap_or(0),
@@ -496,6 +508,7 @@ fn main() {
         }
     }));
     let mut args = args(std::env::args_os().skip(1));
+    args.restart = restart_options(&args);
     // The CD: the one given, else one here or picked before. With none
     // (or `--open`) the game runs on the port's own packs alone.
     let cd_path = if args.open {
@@ -504,7 +517,6 @@ fn main() {
         args.cd.clone().or_else(|| pick::found(&default_cd()))
     };
     if cd_path.is_none() {
-        args.auto_open = !args.open;
         args.open = true;
         for p in [&mut args.opengfx, &mut args.opensfx, &mut args.opendata] {
             p.get_or_insert(Pack::Builtin);
@@ -523,18 +535,9 @@ fn main() {
         .overrides
         .clone()
         .map(|d| Box::new(engine::assets::Dir(d)) as Box<dyn Source>);
-    let graphics = args.opengfx.as_ref().map(|g| match g {
-        Pack::Dir(d) => Box::new(engine::assets::Dir(d.clone())) as Box<dyn Source>,
-        Pack::Builtin => Box::new(engine::opengfx::builtin()),
-    });
-    let sounds = args.opensfx.as_ref().map(|g| match g {
-        Pack::Dir(d) => Box::new(engine::assets::Dir(d.clone())) as Box<dyn Source>,
-        Pack::Builtin => Box::new(engine::opensfx::builtin()),
-    });
-    let data = args.opendata.as_ref().map(|g| match g {
-        Pack::Dir(d) => Box::new(engine::assets::Dir(d.clone())) as Box<dyn Source>,
-        Pack::Builtin => Box::new(engine::opendata::builtin()),
-    });
+    let graphics = args.opengfx.as_ref().map(|p| p.source(engine::opengfx::builtin));
+    let sounds = args.opensfx.as_ref().map(|p| p.source(engine::opensfx::builtin));
+    let data = args.opendata.as_ref().map(|p| p.source(engine::opendata::builtin));
     let packs = engine::assets::Packs {
         graphics: graphics.as_deref(),
         sounds: sounds.as_deref(),
@@ -553,8 +556,9 @@ fn main() {
     }
 }
 
-/// The options of `args` to start again with on another CD: the window's
-/// are in the settings file by then.
+/// The options of `args` as the player gave them, to start again with on
+/// another CD: not `--open` (a CD was chosen), and the window's are in the
+/// settings file by then.
 #[cfg(not(target_arch = "wasm32"))]
 fn restart_options(args: &Args) -> Vec<std::ffi::OsString> {
     let mut o = Vec::new();
@@ -562,11 +566,6 @@ fn restart_options(args: &Args) -> Vec<std::ffi::OsString> {
         let mut a = std::ffi::OsString::from("--overrides=");
         a.push(d);
         o.push(a);
-    }
-    // Another CD was chosen: not `--open`, nor the packs that stood in for
-    // having none.
-    if args.auto_open {
-        return o;
     }
     for (flag, pack) in [
         ("--opengfx", &args.opengfx),
@@ -679,10 +678,34 @@ fn start(args: &Args, assets: Assets) -> Result<(), platform::Error> {
         theme,
         settings_file,
         #[cfg(not(target_arch = "wasm32"))]
-        options: restart_options(args),
+        options: args.restart.clone(),
         done: false,
         #[cfg(not(target_arch = "wasm32"))]
         asking: None,
     };
     platform::run("Gadget Generator", args.window.clone(), app)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn restart(given: &[&str]) -> Vec<String> {
+        let a = args(given.iter().map(std::ffi::OsString::from));
+        restart_options(&a)
+            .into_iter()
+            .map(|o| o.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn change_cd_keeps_the_players_options() {
+        // `--open` gives way to the CD chosen; what was given stays.
+        assert_eq!(restart(&["--open"]), Vec::<String>::new());
+        assert_eq!(
+            restart(&["--open", "--no-audio", "--opengfx=gfx", "--overrides=o"]),
+            ["--overrides=o", "--opengfx=gfx", "--no-audio"]
+        );
+        assert_eq!(restart(&["--opensfx", "x.iso"]), ["--opensfx"]);
+    }
 }

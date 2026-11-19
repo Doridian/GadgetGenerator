@@ -27,7 +27,7 @@ impl Editor {
             self.alert(5);
             return;
         };
-        let done = puzzle::read_solved(&file, self.profile.as_ref());
+        let done = puzzle::read_solved(&file, self.profile.as_ref(), puzzle::done_key(&self.assets));
         // Line `i` is puzzle `i + 1`, named by its ID (`0x414781`; a
         // missing one has no name), `CountResources('Puzl')` of them.
         let lines = (1..=file.puzzles.len())
@@ -73,7 +73,7 @@ impl Editor {
             return;
         }
         if let Some(file) = puzzle::open(&self.assets) {
-            puzzle::reset_solved(&file, self.profile.as_mut());
+            puzzle::reset_solved(&file, self.profile.as_mut(), puzzle::done_key(&self.assets));
         }
         if let Some(d) = &mut self.puzzle_dialog {
             d.clear_marks();
@@ -136,7 +136,12 @@ impl Editor {
     /// (`0x42d4b1`), nothing unless a puzzle is loaded.
     pub(super) fn mark_solved(&mut self) {
         let file = puzzle::open(&self.assets);
-        puzzle::mark_solved(self.puzzle, file.as_ref(), self.profile.as_mut());
+        puzzle::mark_solved(
+            self.puzzle,
+            file.as_ref(),
+            self.profile.as_mut(),
+            puzzle::done_key(&self.assets),
+        );
     }
 
     /// Save As while a puzzle is loaded (`0x415c1f`), once a name is

@@ -20,8 +20,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::assets::{Module, PUZZLE_FILE, Source};
-use crate::opengfx::Embedded;
+use crate::assets::{Embedded, Module, PUZZLE_FILE, Source};
 
 /// The help file in the pack.
 pub const HELP_FILE: &str = "HELP.TXT";
@@ -32,7 +31,7 @@ pub const SAMPLE_DIR: &str = "samples";
 /// (`build.rs`).
 #[must_use]
 pub fn builtin() -> Embedded {
-    Embedded(BUILTIN)
+    Embedded::new(BUILTIN)
 }
 
 include!(concat!(env!("OUT_DIR"), "/opendata_files.rs"));

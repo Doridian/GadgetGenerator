@@ -46,9 +46,11 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Whether `data` is a help text (its first line is `title:`).
+/// Whether `data` is a help text (its first line is `title:`, after a
+/// byte order mark and blanks, as [`parse`] reads it).
 #[must_use]
 pub fn is_helptext(data: &[u8]) -> bool {
+    let data = data.strip_prefix(b"\xef\xbb\xbf").unwrap_or(data);
     data.trim_ascii_start().starts_with(b"title:")
 }
 
@@ -218,11 +220,11 @@ fn read_topics<'a>(lines: impl Iterator<Item = &'a str>) -> Result<Vec<Raw>, Err
 /// If it doesn't start with `title:`, has no topics, or links to a topic
 /// that isn't there.
 pub fn parse(text: &str) -> Result<HelpFile, Error> {
-    let mut lines = text.lines();
+    let mut lines = text.trim_start_matches('\u{feff}').lines();
     let title = lines
         .by_ref()
         .find(|l| !l.trim().is_empty())
-        .and_then(|l| l.strip_prefix("title:"))
+        .and_then(|l| l.trim_start().strip_prefix("title:"))
         .ok_or(Error::NotHelpText)?
         .trim()
         .to_owned();
@@ -346,6 +348,11 @@ mod tests {
             }
         )));
         assert_eq!(h.topic_for_hash(2).unwrap().title, "Wires");
+        // A byte order mark or an indented title: still one, both ways.
+        for doc in [format!("\u{feff}{DOC}"), format!("\n  {DOC}")] {
+            assert!(is_helptext(doc.as_bytes()));
+            assert_eq!(parse(&doc).unwrap().title, "Test Help");
+        }
         let w = &h.topics[1];
         assert_eq!(w.scroll.len(), 3);
         assert!(w.scroll[1].plain_text().starts_with('\u{95}') || w.scroll[1].plain_text().starts_with('•'));

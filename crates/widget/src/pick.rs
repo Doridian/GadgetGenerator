@@ -181,19 +181,18 @@ const ERROR: u8 = 3;
 /// Asks for the CD image to be dropped on the window, where there's no
 /// file dialog: the port's own picture of it, its text in the bundled
 /// fonts (`engine::assets::bundled_fonts`), with why the last one dropped
-/// isn't the game's.
+/// isn't the game's. Shown for Change CD..., in the game's window: Esc
+/// goes back to the game.
 pub struct DropScreen {
     surface: Surface,
     palette: [[u8; 3]; 256],
     fonts: Vec<Font>,
-    /// Change CD..., in the game's window: Esc goes back to the game.
-    in_game: bool,
     error: Option<String>,
 }
 
 impl DropScreen {
     #[must_use]
-    pub fn new(in_game: bool, dark: bool) -> DropScreen {
+    pub fn new(dark: bool) -> DropScreen {
         let mut palette = [[0; 3]; 256];
         let colours = if dark {
             [
@@ -215,7 +214,6 @@ impl DropScreen {
             surface: Surface::new(1, 1),
             palette,
             fonts: engine::assets::bundled_fonts(),
-            in_game,
             error: None,
         };
         s.draw();
@@ -299,15 +297,7 @@ impl DropScreen {
             DIM,
             "There's no file dialog here to choose it with (no xdg-desktop-portal, no zenity).",
         );
-        add(
-            &small,
-            DIM,
-            if self.in_game {
-                "Esc goes back to the game."
-            } else {
-                "It can be given on the command line too. Closing the window quits."
-            },
-        );
+        add(&small, DIM, "Esc goes back to the game.");
         if let Some(e) = &self.error {
             add(&small, TEXT, "");
             add(&small, ERROR, e);
@@ -363,7 +353,7 @@ mod tests {
 
     #[test]
     fn wraps_at_spaces() {
-        let s = DropScreen::new(false, false);
+        let s = DropScreen::new(false);
         let font = s.font(16).unwrap();
         let one = wrap(&font, "Drop the game's CD image", 10_000);
         assert_eq!(one, vec![b"Drop the game's CD image".to_vec()]);

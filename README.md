@@ -88,10 +88,10 @@ the port's own (`tools/make-icon.py`).
 ## Running
 
 ```sh
-cargo run --release -p widget                       # the .iso here, else orig/, else no CD
-cargo run --release -p widget -- CD.iso MY.WGT      # a CD and a widget to open
-cargo run --release -p widget -- CD.iso 'https://…/widget.html#w=…'   # a widget link
-cargo run --release -p widget -- --help
+cargo run --release -p gadget-generator                  # the .iso here, else orig/, else no CD
+cargo run --release -p gadget-generator -- CD.iso MY.WGT # a CD and a widget to open
+cargo run --release -p gadget-generator -- CD.iso 'https://…/widget.html#w=…' # a widget link
+cargo run --release -p gadget-generator -- --help
 ```
 
 Options: `--open`, `--opengfx`, `--opensfx` and `--opendata`
@@ -154,10 +154,10 @@ samples written anew. The game has no music besides its intro, which the
 port leaves out, so there is no music set.
 
 ```sh
-cargo run --release -p widget                         # no CD here: the packs alone
-cargo run --release -p widget -- --open               # the packs even with a CD here
-cargo run --release -p widget -- --opengfx --opensfx CD.iso   # the CD's data, own pictures and sounds
-cargo run --release -p widget -- --opengfx=DIR CD.iso # a pack from a folder
+cargo run --release -p gadget-generator                         # no CD here: the packs alone
+cargo run --release -p gadget-generator -- --open               # the packs even with a CD here
+cargo run --release -p gadget-generator -- --opengfx --opensfx CD.iso   # the CD's data, own pictures and sounds
+cargo run --release -p gadget-generator -- --opengfx=DIR CD.iso # a pack from a folder
 ```
 
 The packs are in `crates/engine/opengfx`, `crates/engine/opensfx` and

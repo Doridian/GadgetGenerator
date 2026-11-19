@@ -1,5 +1,5 @@
 [package]
-name = "widget"
+name = "gadget-generator"
 version = "0.1.0"
 description = "Gadget Generator, the executable"
 edition.workspace = true
@@ -7,12 +7,6 @@ license.workspace = true
 publish.workspace = true
 homepage.workspace = true
 repository.workspace = true
-
-# The program is the game's name, not a word as general as the crate's
-# (`/usr/bin/widget` would clash with other packages').
-[[bin]]
-name = "gadget-generator"
-path = "src/main.rs"
 
 [dependencies]
 engine = { path = "../engine" }

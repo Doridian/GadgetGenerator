@@ -384,8 +384,8 @@ impl Dialog {
         } else {
             text.replace(['\r', '\n'], " ")
         };
-        while t.len() > field.max {
-            t.pop();
+        if let Some((at, _)) = t.char_indices().nth(field.max) {
+            t.truncate(at);
         }
         if t.ends_with('\r') {
             t.pop();
@@ -1599,6 +1599,9 @@ mod tests {
         assert_eq!((field.text.as_str(), field.multiline, field.max), ("", false, 59));
         d.set_focused_text("Two\nlines");
         assert_eq!(d.focused_text().unwrap().text, "Two lines");
+        // Capped in characters, not in UTF-8's bytes.
+        d.set_focused_text(&"é".repeat(70));
+        assert_eq!(d.focused_text().unwrap().text.chars().count(), 59);
         let edit = d.controls[1].rect;
         let at = |q: (i32, i32)| (q.0 + d.client.x0, q.1 + d.client.y0);
         assert!(d.over_text(at((edit.x0 + 1, edit.y0 + 1))));

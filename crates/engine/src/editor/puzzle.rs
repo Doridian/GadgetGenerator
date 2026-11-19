@@ -36,8 +36,7 @@ impl Editor {
                     .puzzles
                     .iter()
                     .find(|p| usize::try_from(p.id).ok() == Some(n))
-                    .map(formats::pzl::Puzzle::title)
-                    .unwrap_or_default();
+                    .map_or_default(formats::pzl::Puzzle::title);
                 puzzle_dialog::line(&title, done.get(n - 1).copied().unwrap_or(false))
             })
             .collect();

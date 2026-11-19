@@ -247,10 +247,9 @@ impl SettingsBox {
                 self.enhanced = !self.enhanced;
                 Outcome::Enhanced(self.enhanced)
             }
-            Part::FullScreen => {
-                self.full_screen = !self.full_screen;
-                Outcome::FullScreen(self.full_screen)
-            }
+            // The check box follows the window, as the host says
+            // (`Editor::set_full_screen`): a browser may refuse.
+            Part::FullScreen => Outcome::FullScreen(!self.full_screen),
             Part::ChangeCd => Outcome::ChangeCd,
         }
     }
@@ -425,6 +424,8 @@ mod tests {
         assert_eq!(b.key(0x41), Outcome::Scale(Scale::Fixed(2.0)));
         assert_eq!(b.key(0x45), Outcome::Enhanced(false));
         assert_eq!(b.key(0x46), Outcome::FullScreen(true));
+        assert!(!b.full_screen, "only the host's word checks it");
+        b.full_screen = true;
         assert_eq!(b.key(0x46), Outcome::FullScreen(false));
         b.scale = Scale::Fixed(1.0);
         assert_eq!(b.key(0x6d), Outcome::None, "− is greyed at 1×");

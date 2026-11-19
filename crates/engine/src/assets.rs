@@ -398,7 +398,7 @@ impl Assets {
     /// ascending.
     #[must_use]
     pub fn ids(&self, m: Module, typ: u32) -> Vec<u32> {
-        let mut ids: Vec<u32> = self.modules.get(&m).map(|r| r.ids(typ).collect()).unwrap_or_default();
+        let mut ids: Vec<u32> = self.modules.get(&m).map_or_default(|r| r.ids(typ).collect());
         for extra in [&self.overrides, &self.own] {
             ids.extend(extra.range((m, typ, 0)..=(m, typ, u32::MAX)).map(|((_, _, id), _)| *id));
         }
@@ -529,12 +529,11 @@ impl Source for Dir {
     fn list(&self, path: &str) -> Vec<String> {
         self.find(path)
             .and_then(|p| std::fs::read_dir(p).ok())
-            .map(|rd| {
+            .map_or_default(|rd| {
                 rd.flatten()
                     .map(|e| e.file_name().to_string_lossy().into_owned())
                     .collect()
             })
-            .unwrap_or_default()
     }
 }
 
@@ -626,8 +625,7 @@ mod tests {
         fn list(&self, path: &str) -> Vec<String> {
             self.read(path)
                 .and_then(|d| formats::iso::records(&d).ok())
-                .map(|r| r.into_iter().map(|r| r.name).collect())
-                .unwrap_or_default()
+                .map_or_default(|r| r.into_iter().map(|r| r.name).collect())
         }
     }
 

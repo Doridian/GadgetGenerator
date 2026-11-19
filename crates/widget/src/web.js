@@ -150,6 +150,11 @@ const SV = {
   start: "Starta",
   "t-open-note": "Utan skivan använder spelet Gadget Generators egna bilder, ljud, texter och pussel, på",
   "t-cd-lang": "Med skivan talar det skivans språk.",
+  "t-enhanced": "Förbättringar",
+  "t-enhanced-note":
+    "Några ändringar som gör spelet lättare att använda än originalet: lådan visar en hel flik på en " +
+    "gång, och fönstren flyttas hela när de dras. Kryssa ur rutan för att få allt precis som i " +
+    "originalet; Alternativ ▸ Inställningar slår också på och av det senare.",
 };
 const FR = {
   "t-cd": "L'image du CD du jeu (.iso)",
@@ -166,6 +171,12 @@ const FR = {
   start: "Démarrer",
   "t-open-note": "Sans le CD, le jeu utilise les images, sons, textes et problèmes de Gadget Generator, en",
   "t-cd-lang": "Avec le CD, il parle la langue du CD.",
+  "t-enhanced": "Améliorations",
+  "t-enhanced-note":
+    "Quelques changements qui rendent le jeu plus facile à utiliser que l'original : la fenêtre à " +
+    "outils montre un dossier entier d'un coup, et les fenêtres se déplacent en entier quand tu les " +
+    "fais glisser. Décoche la case pour que tout soit exactement comme dans l'original ; " +
+    "Options ▸ Paramètres le change aussi plus tard.",
 };
 const WORDS = { sv: SV, fr: FR };
 

@@ -56,8 +56,10 @@ the image into memory and opens the editor. Later starts skip the form
 and open the editor on the image it kept. Options ▸ Settings ▸ **Change
 CD...** (after "Save changes?") reloads the page into the form, which
 shows the kept image: **Start** goes on with it, picking another file
-replaces it. If the kept image no longer reads or opens, the form asks
-for one again. The page never fetches or sends the CD's data: the image
+replaces it. The form's **Enhancements** box is the Settings window's
+(on unless turned off), kept in the browser's `settings.ini` the moment
+it's ticked or unticked, so it holds for Play without the CD too. If
+the kept image no longer reads or opens, the form asks for one again. The page never fetches or sends the CD's data: the image
 comes from the player.
 
 A browser won't let a page play sound before a click or key press: the

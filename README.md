@@ -20,7 +20,10 @@ for `WIDGET.HLP`. It's a non-matching decompilation of the Win95 build's
 the same bytes. The stack is winit, wgpu and cpal, with a resizable
 window, fullscreen and UI scaling.
 
-This repository contains **no game data files or original code**.
+This repository contains **no game data files or original code**, and
+none of the game's prose: the packs' texts, help, puzzles and samples
+are written anew; only names, presets and short words of the interface
+may match the original's ([Legal](#legal)).
 Without the game's CD the port runs on its own free replacements:
 OpenWGFX (the pictures and pointers), OpenWSFX (the sounds) and
 OpenWDATA (the texts, dialogs, help, puzzles and sample widgets), built
@@ -47,15 +50,27 @@ Mac/PC CD's own fonts (`WIN31/SVGA`) are there, they win.
 
 ## Packages
 
-Every push builds the port as one file per platform
+Every push to main builds the port for every platform
 (`.github/workflows/build.yml`); a `v*` tag publishes them on its release:
 
-- `gadget-generator-x86_64.AppImage`, `gadget-generator-aarch64.AppImage`
+- `gadget-generator-x86_64.AppImage`, `gadget-generator-aarch64.AppImage`,
+  the same as `.deb` and `.rpm` packages
+  (`sudo apt install ./gadget-generator-x86_64.deb` on Debian and Ubuntu,
+  `sudo dnf install ./gadget-generator-x86_64.rpm` on Fedora), and the
+  bare program in `gadget-generator-linux-x86_64.tar.gz` / `-aarch64`
   (built on Ubuntu 22.04: glibc 2.35 or newer)
-- `gadget-generator-windows-x86_64.exe` (the C runtime linked in)
+- `gadget-generator-windows-x86_64.exe`, `gadget-generator-windows-arm64.exe`
+  (the C runtime linked in)
 - `gadget-generator-macos.dmg`: `Gadget Generator.app`, for Apple silicon and
-  Intel (signed ad hoc only: the first start needs a right click, Open)
-- `gadget-generator-web.zip`: the browser build, as on the Pages site
+  Intel (signed ad hoc only, so macOS blocks the first start; then System
+  Settings ▸ Privacy & Security ▸ Open Anyway lets it run)
+- `gadget-generator-web.zip`: the browser build, as on the Pages site, also
+  as a container image serving it:
+  `docker run -p 8080:80 ghcr.io/doridian/gadgetgenerator`, then
+  <http://localhost:8080/>
+
+What each package is and how a release is made:
+[packaging/README.md](packaging/README.md).
 
 None of them carries game data. Started without a CD (from its icon) and
 with no `.iso` or `orig` in the working directory, the port runs on its
@@ -86,6 +101,10 @@ Options: `--open`, `--opengfx`, `--opensfx` and `--opendata`
 (resources that replace or add to the CD's) and `--export=DIR` (writes
 every resource there in that layout and quits). On Linux the sound needs
 ALSA's headers to build (`libasound2-dev`).
+With Nix: `nix develop` gives a shell with the Rust tools, the libraries
+the window and the sound load, and the Python tools' packages; `nix run
+. -- CD.iso` builds and starts it (`flake.nix`), and `nix run
+github:Doridian/GadgetGenerator` without a checkout.
 
 Options ▸ Settings, the port's own, changes the UI scale on the spot
 (Automatic, or 1× to 4× in quarters), the language without a CD (with
@@ -93,9 +112,12 @@ one, the CD's decides; the widget on the worksheet stays, a puzzle is
 loaded again in the new language), and switches the port's
 enhancements of the original on or off, all of them at once. They're
 on until the player turns them off (`original=true` in the settings
-file). The enhancements: the parts tray shows a whole folder at once, its pages one
-under the other, without the page arrows; and the toolbars, dialogs and
-message boxes are dragged whole, not as an outline.
+file, `settings.ini` in `~/.config/gadget-generator`,
+`%APPDATA%\Gadget Generator` or `~/Library/Preferences/Gadget Generator`,
+as `crates/platform/src/storage.rs` says; in the browser, the same file
+in its storage). The enhancements: the parts tray shows a whole folder
+at once, its pages one under the other, without the page arrows; and the
+toolbars, dialogs and message boxes are dragged whole, not as an outline.
 **Full screen** switches the window to full screen and back, as F11 and
 Alt+Enter do (on a phone, where there are no such keys).
 Its **Change CD...** button, after "Save changes?", picks another CD
@@ -157,7 +179,8 @@ file is read too); the port's own words, what the original took from
 Windows and what the port adds, follow it (`engine::lang`). Without a CD
 the packs come in the language chosen: `--lang=sv` or `--lang=fr`
 (`?lang=sv`, `?lang=fr` in the browser, whose start page has a list for
-it), else the system's. Swedish OpenWDATA is `tools/opendata/sv`
+it), else the one picked in Options ▸ Settings, else the system's.
+Swedish OpenWDATA is `tools/opendata/sv`
 (`crates/engine/opendata-sv`), Swedish OpenWGFX the pictures with words,
 `crates/engine/opengfx-sv`, over the English ones; French OpenWDATA is
 `tools/opendata/fr` (`crates/engine/opendata-fr`) and French OpenWGFX
@@ -165,9 +188,22 @@ it), else the system's. Swedish OpenWDATA is `tools/opendata/sv`
 
 ## Tools
 
-- `tools/gh`, `tools/ghidra/`: headless Ghidra setup and CLI for the decompilation.
+- `tools/gh`, `tools/ghidra/`: headless Ghidra setup and CLI for the decompilation
+  (`tools/ghidra/setup.sh` wants the Mac/PC CD's files in `orig/`).
+- `ghidra/pzl_dump.py`: lists what a puzzle file (`WIDGET.PZL`) holds.
 - `tools/build-web.sh`: builds the browser version into `web/`.
 - `tools/make-icon.py`: draws the port's icon.
+- `tools/make-sans-font.py`: renders Widget Sans, the bundled stand-in for
+  the gadgets' Arial, from Liberation Sans (`crates/engine/fonts`).
+- `tools/opengfx/`: draws OpenWGFX, the port's own graphics.
+- `tools/opensfx/`: synthesizes OpenWSFX, the port's own sounds.
+- `tools/opendata/`: builds OpenWDATA, the port's own data.
+- `tools/compare/`: plays the same scripts into the original (in a Windows
+  95 virtual machine) and the port, and compares the screens. The virtual
+  machine is a local setup, not in the repository: `run_vm.py` imports
+  `vm.py` from `~/WidgetWorkshop-vm`, which drives a QEMU Windows 95 guest
+  with the game installed through QEMU's monitor socket (screenshots,
+  keys, mouse), and loads its snapshot `ww-editor`, the editor open.
 
 ## Docs
 
@@ -189,3 +225,11 @@ it), else the system's. Swedish OpenWDATA is `tools/opendata/sv`
 The port's code is under the AGPL-3.0-or-later ([LICENSE](LICENSE)).
 Widget Workshop is © Maxis; Gadget Generator is an unofficial port, and no
 game data is included.
+
+Nor is the game's prose: the parts' descriptions and tips, the messages,
+the help, the puzzles and the samples in OpenWDATA are written anew, in
+English, Swedish and French alike. OpenWDATA keeps the numbers the code
+and saved widgets rely on (where the knots are, the dialogs' layouts and
+ids, the palette), so that widgets made with the original work the same;
+the parts' plain names, the drop-down lists' presets and short words of
+the interface (OK, Cancel, Open...) may match the original's.

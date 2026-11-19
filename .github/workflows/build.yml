@@ -1,23 +1,35 @@
 name: build
 
-# The port for Linux (x86-64, aarch64), Windows (x86-64), macOS (universal)
-# and the browser, on every push and pull request, each one file: an
-# AppImage, an .exe, the app in a .dmg. None carries the CD's data: they
-# run on the port's own packs (OpenWGFX, OpenWSFX, OpenWDATA), or on the
-# CD image the player gives at run time, natively on the command line or
-# in Change CD... (`pick`), in the browser on the page. A push
-# to main also deploys the page to GitHub Pages (docs/web.md); a tag v*
-# publishes every package on the tag's release.
+# The port for Linux (x86-64, aarch64: an AppImage, a .deb, an .rpm and
+# the bare program in a .tar.gz), Windows (x86-64, arm64: an .exe each),
+# macOS (universal: the app in a .dmg) and the browser (the site in a .zip,
+# and a container image serving it), on pushes to main, tags and pull
+# requests. None carries the CD's data: they run on the port's own packs
+# (OpenWGFX, OpenWSFX, OpenWDATA), or on the CD image the player gives at
+# run time, natively on the command line or in Change CD... (`pick`), in
+# the browser on the page. A push to main also deploys the page to GitHub
+# Pages (docs/web.md); a tag v* publishes every package on the tag's
+# release and the container image on ghcr.io (packaging/README.md).
 
 on:
   push:
     branches: ['main']
     tags: ['v*']
+    # A push that changes only words for people (the docs, the READMEs,
+    # the packaging notes) builds nothing; a tag always builds. A pull
+    # request always builds, so its checks always report.
+    paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# A newer push to the same branch or pull request stops the run it makes
+# needless; a tag's run is never stopped.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   linux:
@@ -68,6 +80,7 @@ jobs:
           doc=AppDir/usr/share/doc/gadget-generator
           mkdir -p $doc
           cp LICENSE README.md $doc/
+          mkdir -p $doc/fonts && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt $doc/fonts/
           cp crates/widget/res/icon.png gadget-generator.png
           # the window, the GPU and the sound are the host's (dlopen'd, or
           # linuxdeploy's excludelist: libasound, libGL, libvulkan)
@@ -76,10 +89,56 @@ jobs:
           # (it starts: the libraries are all there)
           { ./$out --help 2>&1 || true; } | grep "usage:"
 
+      # cargo-deb and cargo-generate-rpm have no aarch64 Linux binaries to
+      # download, so install-action builds them there (a minute): the
+      # built ones are kept between runs, keyed by their versions (pinned
+      # here: a newer version is a change to this file, and builds anew).
+      - id: tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/cargo-deb
+            ~/.cargo/bin/cargo-generate-rpm
+          key: packaging-tools-${{ runner.os }}-${{ runner.arch }}-cargo-deb@3.8.0-cargo-generate-rpm@0.21.1
+
+      - if: steps.tools.outputs.cache-hit != 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb@3.8.0,cargo-generate-rpm@0.21.1
+
+      # The same program as the AppImage's, packaged for the distributions'
+      # own package managers (crates/widget/Cargo.toml's package.metadata),
+      # and bare, for anyone who'd rather unpack it.
+      - name: Package (.deb, .rpm, .tar.gz)
+        run: |
+          a=${{ matrix.arch }}
+          # the release's version, from its tag, as the macOS app has it
+          v=$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/widget/Cargo.toml)
+          case "$GITHUB_REF" in refs/tags/v*) v=${GITHUB_REF_NAME#v} ;; esac
+          # a pre-release (v1.2.0-rc.1) as both formats spell one, sorting
+          # before the release: rpm forbids '-' in a version, and dpkg
+          # would take what follows it for the Debian revision
+          v=${v//-/\~}
+          cargo deb -p widget --no-build --deb-version "$v" --output gadget-generator-$a.deb
+          cargo generate-rpm -p crates/widget --set-metadata "version = \"$v\"" --output gadget-generator-$a.rpm
+          t=gadget-generator-linux-$a
+          mkdir $t
+          cp target/release/widget LICENSE README.md $t/
+          mkdir $t/fonts && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt $t/fonts/
+          tar czf $t.tar.gz $t
+
       - uses: actions/upload-artifact@v7
         with:
           name: gadget-generator-${{ matrix.arch }}.AppImage
           path: gadget-generator-${{ matrix.arch }}.AppImage
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gadget-generator-linux-${{ matrix.arch }}-packages
+          path: |
+            gadget-generator-${{ matrix.arch }}.deb
+            gadget-generator-${{ matrix.arch }}.rpm
+            gadget-generator-linux-${{ matrix.arch }}.tar.gz
 
   windows:
     runs-on: windows-latest
@@ -93,25 +152,35 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build
-        run: cargo build --release --locked -p widget
+      - name: Build (x86-64 and arm64)
+        run: |
+          cargo build --release --locked -p widget
+          cargo build --release --locked -p widget --target aarch64-pc-windows-msvc
 
       - name: Package
         run: |
           cp target/release/widget.exe gadget-generator-windows-x86_64.exe
-          # (it starts)
+          cp target/aarch64-pc-windows-msvc/release/widget.exe gadget-generator-windows-arm64.exe
+          # (it starts; the arm64 one can't on this runner)
           { ./gadget-generator-windows-x86_64.exe --help 2>&1 || true; } | grep "usage:"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: gadget-generator-windows-x86_64
-          path: gadget-generator-windows-x86_64.exe
+          name: gadget-generator-windows
+          path: |
+            gadget-generator-windows-x86_64.exe
+            gadget-generator-windows-arm64.exe
 
   macos:
-    runs-on: macos-26
+    # Intel: GitHub's Apple silicon runners are often queued for long (the
+    # job may not get one at all); this one builds both halves of the
+    # universal app just as well.
+    runs-on: macos-26-intel
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
@@ -149,6 +218,7 @@ jobs:
           done
           iconutil -c icns gadget-generator.iconset -o "$c/Resources/gadget-generator.icns"
           cp LICENSE README.md "$c/Resources/"
+          mkdir -p "$c/Resources/fonts" && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt "$c/Resources/fonts/"
           otool -L "$c/MacOS/widget"
           lipo -info "$c/MacOS/widget"
           codesign --force --deep -s - "$app"
@@ -201,6 +271,7 @@ jobs:
           d=gadget-generator-web
           cp -r _site $d
           cp LICENSE README.md $d/
+          mkdir $d/fonts && cp crates/engine/fonts/README.md crates/engine/fonts/LICENSE-*.txt $d/fonts/
           zip -r $d.zip $d
 
       - uses: actions/upload-artifact@v7
@@ -233,16 +304,87 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
+  # The site served by nginx, for anyone to host the browser version
+  # (packaging/docker): built on every push, pushed to ghcr.io on a tag.
+  docker:
+    needs: web
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: gadget-generator-web
+
+      # The build's context is the site alone (the Dockerfile only copies
+      # it, so arm64 needs no emulation).
+      - run: unzip -q gadget-generator-web.zip -d context
+
+      - uses: docker/setup-buildx-action@v4
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # The image is named after the repository (ghcr.io/owner/repo), in
+      # the lower case ghcr.io wants.
+      - id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      # A release v1.2.3 is :1.2.3, :1.2 and :latest; the labels tie the
+      # package to this repository (its page shows the description and the
+      # README, and the workflow may push to it).
+      - id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=Gadget Generator
+            org.opencontainers.image.description=Gadget Generator in the browser: a decompilation and native port of Widget Workshop, served by nginx. No game data: bring the CD image or play without it.
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          annotations: |
+            org.opencontainers.image.title=Gadget Generator
+            org.opencontainers.image.description=Gadget Generator in the browser: a decompilation and native port of Widget Workshop, served by nginx. No game data: bring the CD image or play without it.
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+
+      - uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: context
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
+    # (not the container image's job: a failure pushing it doesn't hold
+    # back the packages)
     needs: [linux, windows, macos, web]
     runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
+      # Only the packages: not the container build's record, which
+      # docker/build-push-action keeps as an artifact of its own.
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: gadget-generator-*
           merge-multiple: true
 
       - name: Publish on the release
@@ -250,7 +392,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+        # A new release is made with its files, so that it's published
+        # (and its "published" event sent) only once they're all up; a run
+        # again on the same tag replaces them.
         run: |
           ls -l dist
-          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
-          gh release upload "$TAG" dist/* --clobber
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --verify-tag --generate-notes --title "$TAG"
+          fi

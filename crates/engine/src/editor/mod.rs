@@ -2041,13 +2041,20 @@ impl Editor {
     /// The port's words, the menu, the tray, the help and the Settings
     /// window come in the new language at once. The widget stays the
     /// player's, its words too, with its name, its modified flag and its
-    /// undo step, only read again with the new resources; a puzzle comes
-    /// again from the new puzzle file, its words being the game's (Undo
-    /// brings back the one left). A running widget stops first.
+    /// undo step, only read again with the new resources; a puzzle the
+    /// player hasn't changed comes again from the new puzzle file, its
+    /// words being the game's (Undo brings back the one left), and one
+    /// they have stays theirs like any widget. A running widget stops
+    /// first.
     pub fn set_assets(&mut self, assets: Assets) {
         self.stop();
         self.doc.tray_limits = self.tray.limits();
         let saved = self.doc.save();
+        let untouched = self.puzzle.active
+            && self.puzzle_doc(self.puzzle.number).is_some_and(|mut d| {
+                d.tray_limits.clone_from(&self.doc.tray_limits);
+                d.save() == saved
+            });
         crate::lang::set(assets.lang);
         self.assets = assets;
         self.pictures = Pictures::default();
@@ -2055,11 +2062,7 @@ impl Editor {
         self.menu = self.load_menu();
         self.tray.set_assets(&self.assets, &self.pictures);
         self.sel = Sel::None;
-        let puzzle = self
-            .puzzle
-            .active
-            .then(|| self.puzzle_doc(self.puzzle.number))
-            .flatten();
+        let puzzle = untouched.then(|| self.puzzle_doc(self.puzzle.number)).flatten();
         if let Some(doc) = puzzle {
             self.undo = Some(saved);
             self.put_puzzle(doc);

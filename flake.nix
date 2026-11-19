@@ -71,14 +71,14 @@
               doCheck = false;
               nativeBuildInputs = common.nativeBuildInputs ++ [ pkgs.makeWrapper ];
               postFixup = ''
-                wrapProgram $out/bin/widget \
+                wrapProgram $out/bin/gadget-generator \
                   --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath (runtimeLibs pkgs)}
               '';
               meta = {
                 description = "A decompilation and native port of Widget Workshop, with its own graphics, sounds and data";
                 homepage = "https://doridian.github.io/GadgetGenerator/";
                 license = pkgs.lib.licenses.agpl3Plus;
-                mainProgram = "widget";
+                mainProgram = "gadget-generator";
               };
             }
           );

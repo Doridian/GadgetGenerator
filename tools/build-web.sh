@@ -46,7 +46,7 @@ cargo build --manifest-path "$root/Cargo.toml" -p widget --target wasm32-unknown
 mkdir -p "$out"
 rm -rf "$out/snippets"
 "$bindgen" --target web --no-typescript --out-dir "$out" --out-name widget \
-    "$root/target/wasm32-unknown-unknown/$profile/widget.wasm"
+    "$root/target/wasm32-unknown-unknown/$profile/gadget-generator.wasm"
 cp "$root/crates/widget/web/index.html" "$out/index.html"
 cp "$root/crates/widget/web/manifest.webmanifest" "$out/manifest.webmanifest"
 cp "$root/crates/widget/res/icon.png" "$out/icon.png"

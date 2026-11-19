@@ -23,7 +23,7 @@ tools/opensfx/make.py 200 201 --preview /tmp/sv --compare EXPORT
 
 Every sound is a Python function (`sounds/*.py`) built with the kit in
 `sfx.py`: oscillators, noise, filters, envelopes, formants, FM. `--compare`
-draws the CD's sound (from `widget --export=EXPORT CD.iso`) under the new
+draws the CD's sound (from `gadget-generator --export=EXPORT CD.iso`) under the new
 one's waveform and spectrogram, to match length, loudness and pitch.
 
 ## Rules

@@ -5,7 +5,7 @@
 //! editor (the original's main menu is left out), with a new widget or
 //! the one given.
 //!
-//! `widget [--open] [--lang=en|sv|fr] [--opengfx[=DIR]] [--opensfx[=DIR]]
+//! `gadget-generator [--open] [--lang=en|sv|fr] [--opengfx[=DIR]] [--opensfx[=DIR]]
 //! [--opendata[=DIR]] [--overrides=DIR] [--export=DIR] [--no-audio]
 //! [--window-size=WxH] [--fullscreen|--windowed] [--ui-scale=N|auto] [--help]
 //! [CD] [WIDGET.WGT|LINK]` ([`USAGE`]), where `CD` is the game's CD: an
@@ -64,7 +64,7 @@ use crate::sound::Sound;
 const LINK_PAGE: &str = "https://doridian.github.io/GadgetGenerator/widget.html";
 
 const USAGE: &str =
-    "usage: widget [--open] [--lang=en|sv|fr] [--opengfx[=DIR]] [--opensfx[=DIR]] [--opendata[=DIR]] [--overrides=DIR] [--export=DIR] [--no-audio] [--window-size=WxH] \
+    "usage: gadget-generator [--open] [--lang=en|sv|fr] [--opengfx[=DIR]] [--opensfx[=DIR]] [--opendata[=DIR]] [--overrides=DIR] [--export=DIR] [--no-audio] [--window-size=WxH] \
 [--fullscreen|--windowed] [--ui-scale=N|auto] [--help] [CD] [WIDGET.WGT|LINK]
 
   CD               the game's CD: an ISO image or a folder with its files

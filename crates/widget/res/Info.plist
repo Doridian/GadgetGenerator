@@ -9,7 +9,7 @@
     <key>CFBundleIdentifier</key>
     <string>io.github.doridian.gadgetgenerator</string>
     <key>CFBundleExecutable</key>
-    <string>widget</string>
+    <string>gadget-generator</string>
     <key>CFBundleIconFile</key>
     <string>gadget-generator</string>
     <key>CFBundlePackageType</key>

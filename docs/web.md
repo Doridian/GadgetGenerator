@@ -172,7 +172,7 @@ not.
 - Opened with a link as its address, the page opens the widget once the
   CD is in, as `?MYWIDGET.WGT` does; a link pasted into the address bar
   of the open page opens too. Natively a link is an argument like a
-  widget's file (`widget CD.iso 'https://…#w=…'`).
+  widget's file (`gadget-generator CD.iso 'https://…#w=…'`).
 
 The clipboard is `platform::clipboard`: arboard natively (X11, Wayland
 where the compositor offers data control, Windows, macOS),

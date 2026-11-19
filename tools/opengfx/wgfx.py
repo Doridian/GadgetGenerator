@@ -9,7 +9,7 @@ top left, whatever its rectangle's offset in the sheet.
 
 The geometry the game needs (frame sizes, the knots' places, the tables of
 points and rectangles where the code draws digits and needles) comes from
-an export of the player's CD (`widget --export DIR`); only sizes and
+an export of the player's CD (`gadget-generator --export DIR`); only sizes and
 places, never pixels: nothing here looks at the CD's pictures.
 """
 from __future__ import annotations
@@ -190,7 +190,7 @@ def font(kind: str, px: float) -> ImageFont.FreeTypeFont:
 
 
 class Geometry:
-    """Sizes and places from an export of the CD (`widget --export`)."""
+    """Sizes and places from an export of the CD (`gadget-generator --export`)."""
 
     def __init__(self, export: Path):
         self.export = Path(export)

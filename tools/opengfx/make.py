@@ -6,7 +6,7 @@ every frame's rectangle.
 
 It needs the sizes and places the game uses, from an export of the CD:
 
-    widget --export=EXPORT CD.iso
+    gadget-generator --export=EXPORT CD.iso
     tools/opengfx/make.py EXPORT [SHEET...] [--preview DIR] [--compare] [--lang sv]
 
 Only the given sheets are drawn again when some are named. --lang sv draws

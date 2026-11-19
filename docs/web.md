@@ -10,7 +10,7 @@ the files and the clock differ.
 
 Needs the `wasm32-unknown-unknown` target and the `wasm-bindgen` CLI in
 the version the crates pin (`wasm-bindgen = "=0.2.130"` in
-`crates/widget/Cargo.toml` and `crates/platform/Cargo.toml`; the CLI
+`crates/gadget-generator/Cargo.toml` and `crates/platform/Cargo.toml`; the CLI
 refuses a module from another version):
 
 ```sh
@@ -20,12 +20,12 @@ tools/build-web.sh            # release build into web/
 tools/build-web.sh --debug    # quicker to build, slow to run
 ```
 
-The script runs `cargo build -p widget --target wasm32-unknown-unknown`
+The script runs `cargo build -p gadget-generator --target wasm32-unknown-unknown`
 and `wasm-bindgen --target web`, and copies the page
-(`crates/widget/web/index.html`), its web manifest and the icon next to
+(`crates/gadget-generator/web/index.html`), its web manifest and the icon next to
 the output: `web/` holds `index.html`, `manifest.webmanifest`,
 `icon.png`, `widget.js`, `widget_bg.wasm` and `snippets/` (the storage
-code, `crates/widget/src/web.js`, and the touch keyboard's field,
+code, `crates/gadget-generator/src/web.js`, and the touch keyboard's field,
 `platform::web`). `web/` is ignored by git.
 
 Upgrading wasm-bindgen means changing the pin in both crates and
@@ -36,7 +36,7 @@ installing the matching CLI.
 `.github/workflows/build.yml` publishes the build on every push to
 `main` at <https://doridian.github.io/GadgetGenerator/>, without the CD's data
 (the workflow fails if anything but the pages, the icon, the glue and
-the module is in the build). `crates/widget/web/front.html` is the
+the module is in the build). `crates/gadget-generator/web/front.html` is the
 site's front page: where to get the CD image, the downloads, and a link
 to the game, `widget.html` (the build's `index.html`).
 
@@ -172,7 +172,7 @@ not.
 - Opened with a link as its address, the page opens the widget once the
   CD is in, as `?MYWIDGET.WGT` does; a link pasted into the address bar
   of the open page opens too. Natively a link is an argument like a
-  widget's file (`widget CD.iso 'https://…#w=…'`).
+  widget's file (`gadget-generator CD.iso 'https://…#w=…'`).
 
 The clipboard is `platform::clipboard`: arboard natively (X11, Wayland
 where the compositor offers data control, Windows, macOS),

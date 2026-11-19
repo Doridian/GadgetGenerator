@@ -20,7 +20,7 @@ cursors/<pointer>.png        the editor's pointer <pointer> (0 to 6)
 ```
 
 A sheet is used only when every one of its frames has a picture; the
-others are still the CD's. `widget --opengfx=DIR` reads a folder in the
+others are still the CD's. `gadget-generator --opengfx=DIR` reads a folder in the
 same layout instead of the built-in copy, to try pictures without
 building.
 
@@ -34,7 +34,7 @@ nearest of the palette), but then take that sheet's function out, or
 
 ```sh
 nix-shell -p 'python3.withPackages(p: [p.pillow])' dejavu_fonts liberation_ttf
-widget --export=EXPORT CD.iso          # the sizes and places, from the CD
+gadget-generator --export=EXPORT CD.iso # the sizes and places, from the CD
 tools/opengfx/make.py EXPORT           # every sheet and the pointers
 tools/opengfx/make.py EXPORT 1029 1030 --preview /tmp/pv --compare
 tools/opengfx/make.py EXPORT --lang sv  # the Swedish words' sheets (below)

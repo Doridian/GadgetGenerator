@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reads the game's data from an export of the CD (`widget --export=DIR
+"""Reads the game's data from an export of the CD (`gadget-generator --export=DIR
 CD.iso`) into OpenWDATA's editable sources (`src/`): the resources the
 port reads besides pictures and sounds, as JSON and text.
 

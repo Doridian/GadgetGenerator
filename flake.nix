@@ -52,7 +52,7 @@
           };
           common = {
             inherit src;
-            inherit (craneLib.crateNameFromCargoToml { cargoToml = ./crates/widget/Cargo.toml; }) pname version;
+            inherit (craneLib.crateNameFromCargoToml { cargoToml = ./crates/gadget-generator/Cargo.toml; }) pname version;
             strictDeps = true;
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = [ pkgs.alsa-lib ];
@@ -66,19 +66,19 @@
             common
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--locked -p widget";
+              cargoExtraArgs = "--locked -p gadget-generator";
               # (the tests are a check of their own)
               doCheck = false;
               nativeBuildInputs = common.nativeBuildInputs ++ [ pkgs.makeWrapper ];
               postFixup = ''
-                wrapProgram $out/bin/widget \
+                wrapProgram $out/bin/gadget-generator \
                   --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath (runtimeLibs pkgs)}
               '';
               meta = {
                 description = "A decompilation and native port of Widget Workshop, with its own graphics, sounds and data";
                 homepage = "https://doridian.github.io/GadgetGenerator/";
                 license = pkgs.lib.licenses.agpl3Plus;
-                mainProgram = "widget";
+                mainProgram = "gadget-generator";
               };
             }
           );
@@ -127,7 +127,7 @@
               p.scipy
             ]))
             # the browser build (tools/build-web.sh): the CLI must be the
-            # version crates/widget/Cargo.toml pins
+            # version crates/gadget-generator/Cargo.toml pins
             wasm-bindgen-cli_0_2_130
             lld
             # the CD image's files, the comparison VM

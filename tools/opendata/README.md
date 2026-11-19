@@ -4,7 +4,7 @@ OpenWDATA is everything Widget Workshop reads from its CD besides the
 pictures (OpenWGFX, `tools/opengfx`) and the sounds (OpenWSFX,
 `tools/opensfx`): the dialogs, the menu, the messages, the parts' texts
 and tables, the palette, the help, the puzzles and the sample widgets.
-With the three packs Gadget Generator runs with no CD at all (`widget --open`,
+With the three packs Gadget Generator runs with no CD at all (`gadget-generator --open`,
 and what it does when no CD is given or found), as OpenTTD runs on
 OpenGFX, OpenSFX and OpenMSX.
 
@@ -19,7 +19,7 @@ HELP.TXT                   the help (formats::helptext)
 samples/<NAME>.WGT         the sample widgets
 ```
 
-`widget --opendata=DIR` reads a folder in the same layout instead.
+`gadget-generator --opendata=DIR` reads a folder in the same layout instead.
 
 ## Sources
 
@@ -43,7 +43,7 @@ cargo run --release -p engine --example recipe -- --parts   # every part's knots
 ```
 
 `build.py --verify EXPORT` compares the built resources with a CD's
-(`widget --export=EXPORT CD.iso`): every format but the texts must come
+(`gadget-generator --export=EXPORT CD.iso`): every format but the texts must come
 out byte for byte the same, which is what keeps saved widgets, the
 parts' wiring and the dialogs working as the game expects.
 

@@ -13,7 +13,7 @@
 //! `MODULE` is `WIDGET`, `WWGADGET`, `WWSOUND` or `WWINTRO`; `type` and
 //! `id` are the resource's numbers (1004 picture sheets, 1006 sounds, 1014
 //! knots, 1020 texts, ...); the extension doesn't matter (`.hr`, `.wav`,
-//! `.txt`, `.bin`). `widget --export DIR` writes every resource in this
+//! `.txt`, `.bin`). `gadget-generator --export DIR` writes every resource in this
 //! layout, a starting point for new art. Fonts are `fonts/*.FON`, and a
 //! `WIDGET.PZL` or `WIDGET.HLP` (or `WIDGET.INF`) at the top replaces the
 //! CD's puzzles or help.

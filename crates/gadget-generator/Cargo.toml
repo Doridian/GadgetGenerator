@@ -1,5 +1,5 @@
 [package]
-name = "widget"
+name = "gadget-generator"
 version = "0.1.0"
 description = "Gadget Generator, the executable"
 edition.workspace = true
@@ -61,7 +61,7 @@ runs without the original CD; with the CD it can use the original's \
 instead."""
 depends = "$auto"
 assets = [
-    ["target/release/widget", "usr/bin/", "755"],
+    ["target/release/gadget-generator", "usr/bin/", "755"],
     ["res/gadget-generator.desktop", "usr/share/applications/", "644"],
     ["res/icon.png", "usr/share/icons/hicolor/512x512/apps/gadget-generator.png", "644"],
     ["../../README.md", "usr/share/doc/gadget-generator/README.md", "644"],
@@ -77,7 +77,7 @@ name = "gadget-generator"
 summary = "A decompilation and native port of Maxis' Widget Workshop"
 url = "https://doridian.github.io/GadgetGenerator/"
 assets = [
-    { source = "target/release/widget", dest = "/usr/bin/widget", mode = "755" },
+    { source = "target/release/gadget-generator", dest = "/usr/bin/gadget-generator", mode = "755" },
     { source = "res/gadget-generator.desktop", dest = "/usr/share/applications/gadget-generator.desktop", mode = "644" },
     { source = "res/icon.png", dest = "/usr/share/icons/hicolor/512x512/apps/gadget-generator.png", mode = "644" },
     { source = "../../README.md", dest = "/usr/share/doc/gadget-generator/README.md", mode = "644", doc = true },

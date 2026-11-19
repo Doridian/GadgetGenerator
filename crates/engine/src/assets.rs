@@ -215,7 +215,7 @@ pub struct Assets {
     /// The puzzle file (`WIDGET.PZL`, `formats::pzl`), if found: the
     /// overrides', else the CD's.
     pub puzzles: Option<Vec<u8>>,
-    /// Whether [`Assets::puzzles`] is the data pack's (`OpenWDATA`'s own
+    /// Whether [`Assets::puzzles`] is the data pack's (OpenWDATA's own
     /// puzzles, solved flags of their own: `puzzle::done_key`).
     pub puzzles_from_pack: bool,
     /// The help file (`WIDGET.HLP`, `formats::hlp`, or the OS/2 CD's

@@ -19,7 +19,7 @@ use crate::assets::Assets;
 pub const SECTION: &str = "Widget Workshop";
 /// The key of the solved flags (`0x42d82d`, `0x42d915`).
 pub const DONE_KEY: &str = "Done";
-/// The key of the solved flags of the port's own puzzle file (`OpenWDATA`):
+/// The key of the solved flags of the port's own puzzle file (OpenWDATA):
 /// its puzzles are other ones under the same numbers, so they keep their
 /// own flags.
 pub const OPEN_DONE_KEY: &str = "OpenDone";
@@ -64,7 +64,7 @@ pub fn open(assets: &Assets) -> Option<Puzzles> {
 }
 
 /// The profile key of the solved flags of `assets`' puzzle file:
-/// [`OPEN_DONE_KEY`] for `OpenWDATA`'s, else the game's [`DONE_KEY`].
+/// [`OPEN_DONE_KEY`] for OpenWDATA's, else the game's [`DONE_KEY`].
 #[must_use]
 pub fn done_key(assets: &Assets) -> &'static str {
     if assets.puzzles_from_pack {

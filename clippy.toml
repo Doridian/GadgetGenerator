@@ -1,0 +1,2 @@
+# Names in the docs' prose, not code: the port's packs and the ones they're named after.
+doc-valid-idents = ["OpenWGFX", "OpenWSFX", "OpenWDATA", "OpenTTD", "OpenGFX", "OpenSFX", "OpenMSX", ".."]

@@ -339,7 +339,7 @@ fn fr(en: &str) -> Option<&'static str> {
         "&Index" => "&Index",
         "I&ndex" => "I&ndex",
         "&Back" => "&Précédent",
-        "&Print" => "&Imprimer",
+        "&Print" => "Imp&rimer",
         "Windows Help" => "Aide de Windows",
         "Help Topics: {}" => "Rubriques d'aide\u{a0}: {}",
         "&1  Type the first few letters of the word you're looking for." => {

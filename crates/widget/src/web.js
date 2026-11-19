@@ -102,6 +102,9 @@ const CHANGE = "widget-workshop-change-cd";
 // without the CD, or the start form's link), kept until a CD is started.
 const NO_CD = "widget-workshop-no-cd";
 
+// The language picked last: the start form's list or Settings ▸ Language.
+const LANG = "widget-workshop-lang";
+
 function storage(f) {
   try {
     return f();
@@ -129,7 +132,7 @@ function withoutCd(lang) {
 // and `lang=` before the game reads it.
 if (storage(() => localStorage.getItem(NO_CD)) !== null && !/[?&]open(&|$)/.test(location.search)) {
   const asked = /[?&]lang=([^&]*)/.exec(location.search);
-  const lang = asked ? asked[1] : storage(() => localStorage.getItem("widget-workshop-lang"));
+  const lang = asked ? asked[1] : storage(() => localStorage.getItem(LANG));
   history.replaceState(null, "", `${withoutCd(lang)}${location.hash}`);
 }
 
@@ -146,7 +149,7 @@ const SV = {
     "som dras till spelet öppnas, och Arkiv ▸ Spara för nedladdning och Ladda ner en uppfinning ger " +
     "dig dem igen. Arkiv ▸ Kopiera länk till uppfinningen gör en länk som öppnar uppfinningen för " +
     "alla som har skivan.",
-  open: "Spela utan skivan",
+  "play-open": "Spela utan skivan",
   start: "Starta",
   "t-open-note": "Utan skivan använder spelet Gadget Generators egna bilder, ljud, texter och pussel, på",
   "t-cd-lang": "Med skivan talar det skivans språk.",
@@ -167,7 +170,7 @@ const FR = {
     "enregistres. Les Eurêkas glissés sur le jeu s'ouvrent, et Fichier ▸ Enregistrer pour " +
     "téléchargement et Télécharger un Eurêka te les rendent. Fichier ▸ Copier le lien vers " +
     "l'Eurêka crée un lien qui ouvre l'Eurêka pour tous ceux qui ont le CD.",
-  open: "Jouer sans le CD",
+  "play-open": "Jouer sans le CD",
   start: "Démarrer",
   "t-open-note": "Sans le CD, le jeu utilise les images, sons, textes et problèmes de Gadget Generator, en",
   "t-cd-lang": "Avec le CD, il parle la langue du CD.",
@@ -216,22 +219,13 @@ function formLanguage($) {
   const lang = $("lang");
   const open = $("play-open");
   if (!lang || !open) return;
-  let picked = null;
-  try {
-    picked = localStorage.getItem("widget-workshop-lang");
-  } catch (e) {
-    console.error("storage:", e);
-  }
+  const picked = storage(() => localStorage.getItem(LANG));
   lang.value = picked || (words ? browser : "en");
   open.onclick = () => storage(() => localStorage.setItem(NO_CD, "1"));
   const follow = () => {
     // The page's own options and widget link stay, the language changed.
     open.href = `${withoutCd(lang.value)}${location.hash}`;
-    try {
-      localStorage.setItem("widget-workshop-lang", lang.value);
-    } catch (e) {
-      console.error("storage:", e);
-    }
+    storage(() => localStorage.setItem(LANG, lang.value));
   };
   lang.onchange = follow;
   follow();
@@ -243,7 +237,7 @@ function formLanguage($) {
 // options and the hash, a widget link, kept) so that a reload or a
 // bookmark plays in it, and the page's own words follow.
 export function changeLang(code) {
-  storage(() => localStorage.setItem("widget-workshop-lang", code));
+  storage(() => localStorage.setItem(LANG, code));
   history.replaceState(history.state, "", `${withoutCd(code)}${location.hash}`);
   pageLanguage(code);
 }
@@ -252,7 +246,7 @@ export function changeLang(code) {
 // later visits until a CD is started; the stored image is kept.
 export function playWithoutCd() {
   storage(() => localStorage.setItem(NO_CD, "1"));
-  location.search = withoutCd(storage(() => localStorage.getItem("widget-workshop-lang")));
+  location.search = withoutCd(storage(() => localStorage.getItem(LANG)));
 }
 
 // Reloads the page into the start form, the stored image kept: Start

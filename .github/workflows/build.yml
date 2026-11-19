@@ -16,10 +16,10 @@ on:
     branches: ['main']
     tags: ['v*']
     # A push that changes only words for people (the docs, the READMEs,
-    # the packaging notes) builds nothing; a tag always builds.
+    # the packaging notes) builds nothing; a tag always builds. A pull
+    # request always builds, so its checks always report.
     paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
   pull_request:
-    paths-ignore: ['**/*.md', 'docs/**', 'LICENSE']
   workflow_dispatch:
 
 permissions:
@@ -91,19 +91,20 @@ jobs:
 
       # cargo-deb and cargo-generate-rpm have no aarch64 Linux binaries to
       # download, so install-action builds them there (a minute): the
-      # built ones are kept between runs. A new key builds newer ones.
+      # built ones are kept between runs, keyed by their versions (pinned
+      # here: a newer version is a change to this file, and builds anew).
       - id: tools
         uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/cargo-deb
             ~/.cargo/bin/cargo-generate-rpm
-          key: packaging-tools-v1-${{ runner.os }}-${{ runner.arch }}
+          key: packaging-tools-${{ runner.os }}-${{ runner.arch }}-cargo-deb@3.8.0-cargo-generate-rpm@0.21.1
 
       - if: steps.tools.outputs.cache-hit != 'true'
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-deb,cargo-generate-rpm
+          tool: cargo-deb@3.8.0,cargo-generate-rpm@0.21.1
 
       # The same program as the AppImage's, packaged for the distributions'
       # own package managers (crates/widget/Cargo.toml's package.metadata),
@@ -114,6 +115,10 @@ jobs:
           # the release's version, from its tag, as the macOS app has it
           v=$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/widget/Cargo.toml)
           case "$GITHUB_REF" in refs/tags/v*) v=${GITHUB_REF_NAME#v} ;; esac
+          # a pre-release (v1.2.0-rc.1) as both formats spell one, sorting
+          # before the release: rpm forbids '-' in a version, and dpkg
+          # would take what follows it for the Debian revision
+          v=${v//-/\~}
           cargo deb -p widget --no-build --deb-version "$v" --output gadget-generator-$a.deb
           cargo generate-rpm -p crates/widget --set-metadata "version = \"$v\"" --output gadget-generator-$a.rpm
           t=gadget-generator-linux-$a
@@ -314,9 +319,9 @@ jobs:
         with:
           name: gadget-generator-web
 
-      - run: unzip -q gadget-generator-web.zip
-
-      - uses: docker/setup-qemu-action@v4
+      # The build's context is the site alone (the Dockerfile only copies
+      # it, so arm64 needs no emulation).
+      - run: unzip -q gadget-generator-web.zip -d context
 
       - uses: docker/setup-buildx-action@v4
 
@@ -341,11 +346,9 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ${{ steps.image.outputs.name }}
-          # (and a push to main builds, without pushing, as "edge")
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=edge,branch=main
           labels: |
             org.opencontainers.image.title=Gadget Generator
             org.opencontainers.image.description=Gadget Generator in the browser: a decompilation and native port of Widget Workshop, served by nginx. No game data: bring the CD image or play without it.
@@ -359,7 +362,7 @@ jobs:
         env:
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
-          context: .
+          context: context
           file: packaging/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -369,7 +372,9 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos, web, docker]
+    # (not the container image's job: a failure pushing it doesn't hold
+    # back the packages)
+    needs: [linux, windows, macos, web]
     runs-on: ubuntu-26.04
     permissions:
       contents: write

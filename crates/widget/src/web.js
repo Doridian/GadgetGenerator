@@ -112,9 +112,11 @@ export function changeCd() {
 // Resolves to the CD image: the stored one at once, else (or after
 // changeCd) once the player presses Start in the start form (#setup)
 // with one. A newly picked image is stored first. `error` says why the
-// last one didn't do. The game's sound starts with the first click or
+// last one didn't do. The form's Enhancements box starts as `enhanced`
+// and calls `onEnhanced` with each change, at once: Play without the CD
+// leaves the page. The game's sound starts with the first click or
 // key either way (platform::audio::resume).
-export async function chooseCd(error) {
+export async function chooseCd(error, enhanced, onEnhanced) {
   const $ = (id) => document.getElementById(id);
   let stored = null;
   try {
@@ -131,6 +133,8 @@ export async function chooseCd(error) {
   }
   if (stored && !change && !error) return stored.blob;
   $("setup").hidden = false;
+  $("enhanced").checked = enhanced;
+  $("enhanced").onchange = () => onEnhanced($("enhanced").checked);
   $("setup-error").textContent = error || "";
   $("setup-error").hidden = !error;
   $("cd-stored").hidden = !stored;

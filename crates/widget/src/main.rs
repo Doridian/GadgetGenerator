@@ -46,7 +46,7 @@ mod sound;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use web_time::Duration;
 
@@ -345,9 +345,8 @@ impl App for Workshop {
         }
         if let Some(on) = self.editor.take_enhanced()
             && let Some(path) = &self.settings_file
-            && let Err(e) = platform::settings::EnhanceSettings::save(path, Some(!on), &[], &[])
         {
-            eprintln!("{}: {e}", path.display());
+            save_enhanced(path, on);
         }
         let cmds = self.editor.take_sounds();
         self.sound.play(cmds);
@@ -662,6 +661,19 @@ fn load(
 ///
 /// # Errors
 /// If the window or the GPU can't be set up.
+/// Whether the port's enhancements are on: yes, unless the player turned
+/// them off (`original=true` in the settings file at `settings`).
+fn enhanced(settings: Option<&Path>) -> bool {
+    settings.is_none_or(|p| platform::settings::EnhanceSettings::load(p).original != Some(true))
+}
+
+/// Keeps the enhancements' switch in the settings file at `path`.
+fn save_enhanced(path: &Path, on: bool) {
+    if let Err(e) = platform::settings::EnhanceSettings::save(path, Some(!on), &[], &[]) {
+        eprintln!("{}: {e}", path.display());
+    }
+}
+
 fn start(args: &Args, assets: Assets) -> Result<(), platform::Error> {
     let mut doc = Document::new();
     let mut path = None;
@@ -712,13 +724,8 @@ fn start(args: &Args, assets: Assets) -> Result<(), platform::Error> {
     };
     let theme = platform::theme::SystemTheme::new();
     editor.set_system_dark(theme.dark());
-    // The port's enhancements only if the player turned them on
-    // (`original=false` in the settings file): as the original otherwise.
     let settings_file = args.window.settings_file.clone();
-    let enhanced = settings_file
-        .as_deref()
-        .is_some_and(|p| platform::settings::EnhanceSettings::load(p).original == Some(false));
-    editor.set_enhanced(enhanced);
+    editor.set_enhanced(enhanced(settings_file.as_deref()));
     let app = Workshop {
         editor,
         sound: Sound::new(audio),

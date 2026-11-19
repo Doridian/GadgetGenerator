@@ -234,6 +234,9 @@ pub struct Assets {
     /// the data pack's as the host chose it. The port's own words follow
     /// it (`crate::lang`).
     pub lang: crate::lang::Lang,
+    /// Whether a data pack from a folder says the language (its own words
+    /// being in it): the Settings window can't change it then.
+    pub lang_from_pack: bool,
     /// What the packs had that couldn't be used, for the host to tell.
     pub pack_problems: Vec<String>,
     /// The bitmap fonts: the overrides', the CD's, then

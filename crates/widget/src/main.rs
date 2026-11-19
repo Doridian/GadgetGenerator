@@ -692,8 +692,9 @@ fn main() {
 }
 
 /// The options of `args` as the player gave them, to start again with on
-/// another CD: not `--open` (a CD was chosen), and the window's are in the
-/// settings file by then.
+/// another CD or without one: not `--open` (a CD was chosen), and the
+/// window's are in the settings file by then. `--lang` stays for playing
+/// without the CD (a CD speaks its own).
 #[cfg(not(target_arch = "wasm32"))]
 fn restart_options(args: &Args) -> Vec<std::ffi::OsString> {
     let mut o = Vec::new();
@@ -715,6 +716,9 @@ fn restart_options(args: &Args) -> Vec<std::ffi::OsString> {
             }
             o.push(a);
         }
+    }
+    if let Some(l) = args.lang {
+        o.push(format!("--lang={}", l.code()).into());
     }
     if args.no_audio {
         o.push("--no-audio".into());
@@ -791,11 +795,18 @@ fn assets_for(args: &Args, cd: Option<&dyn Source>, lang: engine::lang::Lang) ->
     if cd.is_none() {
         // A data pack from a folder says its own language (its word for
         // Cancel): the parts reckon in it, whatever the system's.
+        // The pictures' words follow it too: built again in it.
         let own = matches!(args.opendata, Some(Pack::Dir(_)))
             .then(|| assets.string(0xf221))
             .flatten()
             .and_then(|w| engine::lang::Lang::of_cancel(&w));
-        assets.lang = own.unwrap_or(lang);
+        if let Some(own) = own
+            && own != lang
+        {
+            return assets_for(args, cd, own);
+        }
+        assets.lang = lang;
+        assets.lang_from_pack = own.is_some();
     }
     Ok(assets)
 }
@@ -909,5 +920,7 @@ mod tests {
             ["--overrides=o", "--opengfx=gfx", "--no-audio"]
         );
         assert_eq!(restart(&["--opensfx", "x.iso"]), ["--opensfx"]);
+        // Play without the CD speaks the language asked for.
+        assert_eq!(restart(&["--lang=fr", "x.iso"]), ["--lang=fr"]);
     }
 }

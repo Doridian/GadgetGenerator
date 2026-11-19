@@ -310,6 +310,10 @@ pub struct Dialog {
     yes: bool,
     /// The settings as they were when it opened.
     original: Settings,
+    /// The settings the last preview read from the dialog: the picture is
+    /// drawn with them (`0x41eb78` refreshes the picture before putting
+    /// the gadget's settings back).
+    previewed: Option<Settings>,
     /// The progress bar's percentage (`dlg+0x9c`).
     progress: u16,
 }
@@ -334,6 +338,62 @@ pub(super) fn mul_div(a: i32, b: i32, c: i32) -> i32 {
 }
 
 impl Dialog {
+    /// Whether `p` (on the screen) is over a text field: the text pointer.
+    #[must_use]
+    pub fn over_text(&self, p: (i32, i32)) -> bool {
+        if self.dropped.is_some() {
+            return false;
+        }
+        let q = self.to_client(p);
+        self.controls
+            .iter()
+            .rposition(|c| c.rect.contains(q.0, q.1))
+            .is_some_and(|i| matches!(self.controls[i].ctl, Ctl::Edit { .. }))
+    }
+
+    /// The focused text field's text (lines apart by `\n`), whether it
+    /// takes lines, and how many characters it takes.
+    #[must_use]
+    pub fn focused_text(&self) -> Option<super::TextField> {
+        let c = self.controls.get(self.focus?)?;
+        let Ctl::Edit { filter, multiline, .. } = c.ctl else {
+            return None;
+        };
+        let max = if filter.max > 0 {
+            filter.max
+        } else if self.long_text {
+            239
+        } else {
+            59
+        };
+        Some(super::TextField {
+            text: c.text.replace("\r\n", "\n"),
+            multiline,
+            max,
+        })
+    }
+
+    /// Replaces the focused text field's text, as if typed: what the field
+    /// doesn't take is left out, and a number it doesn't take leaves it as
+    /// it was.
+    pub fn set_focused_text(&mut self, text: &str) {
+        let Some(field) = self.focused_text() else { return };
+        let Some(f) = self.focus else { return };
+        let mut t: String = if field.multiline {
+            text.replace("\r\n", "\n").replace('\n', "\r\n")
+        } else {
+            text.replace(['\r', '\n'], " ")
+        };
+        while t.len() > field.max {
+            t.pop();
+        }
+        if t.ends_with('\r') {
+            t.pop();
+        }
+        self.controls[f].text = t;
+        self.edit_changed(f);
+    }
+
     /// Builds the dialog of `template` (`0x41acb9`), placed as the
     /// template says relative to the frame's client area.
     fn build(assets: &Assets, t: &Template, kind: Kind) -> Dialog {
@@ -432,6 +492,7 @@ impl Dialog {
             changed: false,
             yes: false,
             original: Settings::default(),
+            previewed: None,
             progress: 0,
         }
     }
@@ -680,7 +741,7 @@ impl Dialog {
         let saved = g.core.settings.clone();
         self.read(&mut g.core.settings, ui::font(assets));
         g.behavior.settings_changed(&mut g.core);
-        g.core.settings = saved;
+        self.previewed = Some(std::mem::replace(&mut g.core.settings, saved));
     }
 
     /// OK (`0x41ea2e`): the dialog read back into the settings.
@@ -1162,6 +1223,9 @@ impl Dialog {
                     let mut core = g.core.clone();
                     core.h = x;
                     core.v = y;
+                    if let Some(p) = &self.previewed {
+                        core.settings = p.clone();
+                    }
                     let mut cx = DrawCx {
                         surface: s,
                         assets,
@@ -1473,6 +1537,82 @@ mod tests {
         assert_eq!(back.label(0), b"427");
         assert!(d.changed);
         assert_eq!(d.key(0x0d, false), Result::Ok);
+    }
+
+    /// A change in the dialog shows in its picture at once (`0x41eb78`
+    /// draws the picture before putting the settings back): the Animal
+    /// Sound's picture follows the animal chosen, not only after OK.
+    #[test]
+    fn the_picture_previews_the_change() {
+        let t = Template {
+            style: 0,
+            ex_style: 0,
+            x: 0,
+            y: 0,
+            cx: 200,
+            cy: 200,
+            menu: Field::None,
+            class: Field::None,
+            title: "T".into(),
+            font: None,
+            items: vec![item(1, 0x80, 1, "OK"), item(107, 0x85, 3, "")],
+        };
+        let assets = Assets::default();
+        let mut d = Dialog::build(&assets, &t, Kind::Settings);
+        let mut g = Gadget {
+            core: crate::gadget::Core::new(Tag(*b"AnSd"), 2040, 1042),
+            behavior: crate::gadgets::sound_time::animal_sound(),
+        };
+        g.behavior.init(&mut g.core);
+        assert_eq!(g.core.settings.numbers[0], 1);
+        if let Ctl::Combo { items, sel, .. } = &mut d.controls[1].ctl {
+            items.extend(["Dog", "Cat", "Rooster", "Cow"].map(str::to_owned));
+            // The Dog.
+            *sel = Some(0);
+        }
+        d.changed = true;
+        d.preview(&mut g, &assets);
+        // The gadget keeps its settings until OK; the picture shows the dog.
+        assert_eq!(g.core.settings.numbers[0], 1);
+        assert_eq!(d.previewed.as_ref().map(|s| s.numbers[0]), Some(0));
+    }
+
+    /// The text pointer over a text field; its text read and replaced (a
+    /// phone's own text box).
+    #[test]
+    fn text_fields_want_typing() {
+        let t = Template {
+            style: 0,
+            ex_style: 0,
+            x: 0,
+            y: 0,
+            cx: 200,
+            cy: 200,
+            menu: Field::None,
+            class: Field::None,
+            title: "T".into(),
+            font: None,
+            items: vec![item(1, 0x80, 1, "OK"), item(40, 0x81, 0, "")],
+        };
+        let mut d = Dialog::build(&Assets::default(), &t, Kind::Settings);
+        let field = d.focused_text().unwrap();
+        assert_eq!((field.text.as_str(), field.multiline, field.max), ("", false, 59));
+        d.set_focused_text("Two\nlines");
+        assert_eq!(d.focused_text().unwrap().text, "Two lines");
+        let edit = d.controls[1].rect;
+        let at = |q: (i32, i32)| (q.0 + d.client.x0, q.1 + d.client.y0);
+        assert!(d.over_text(at((edit.x0 + 1, edit.y0 + 1))));
+        let ok = d.controls[0].rect;
+        assert!(!d.over_text(at((ok.x0 + 1, ok.y0 + 1))));
+        let t = Template {
+            items: vec![item(1, 0x80, 1, "OK")],
+            ..t
+        };
+        assert!(
+            Dialog::build(&Assets::default(), &t, Kind::Settings)
+                .focused_text()
+                .is_none()
+        );
     }
 
     #[test]

@@ -53,7 +53,7 @@ use web_time::{Duration, Instant};
 
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition};
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
 use winit::window::{CursorIcon, Fullscreen, Window, WindowId};
@@ -71,6 +71,13 @@ pub const MAX_UI_SCALE: f64 = 4.0;
 /// settings file gives one, in desktop pixels: the original's
 /// recommended 800×600.
 pub const DEFAULT_DESKTOP: (u32, u32) = (800, 600);
+
+/// How long a finger held still on a touch screen takes to be a double
+/// click ([`Runner::long_press`]): longer than the game's double-click time
+/// (500 ms), so that the press itself is a click of its own.
+const LONG_PRESS: Duration = Duration::from_millis(650);
+/// How far (game pixels) a finger may move and still be held still.
+const LONG_PRESS_SLOP: i32 = 4;
 
 /// How many pixels of a touchpad's scrolling make one wheel notch.
 pub const WHEEL_PIXELS: f64 = 40.0;
@@ -102,6 +109,15 @@ pub fn wheel_notches(rest: &mut (f64, f64), delta: MouseScrollDelta) -> (i32, i3
 
 /// How often the game is updated and redrawn.
 const FRAME: Duration = Duration::from_nanos(1_000_000_000 / 60);
+/// The least time between two steps natively ([`Runner::step`]): a frame,
+/// less 2 ms for a timer that wakes a little early.
+#[cfg(not(target_arch = "wasm32"))]
+const NATIVE_STEP: Duration = Duration::from_nanos(1_000_000_000 / 60 - 2_000_000);
+/// In the browser every display frame steps, unless it comes sooner than
+/// this after the last (a display much faster than 60 Hz): frames come
+/// unevenly, and one a little early skipped is a visible jerk.
+#[cfg(target_arch = "wasm32")]
+const BROWSER_STEP: Duration = Duration::from_millis(6);
 
 /// What the game shows: palette indices, top row first, and 256 RGB colours.
 pub struct Frame<'a> {
@@ -162,6 +178,8 @@ pub enum Cursor {
     /// `crNoDrop` (-13): the VCL's no-drop pointer, the circle with a
     /// bar (its own resource in the EXE; the system's here).
     NoDrop,
+    /// `IDC_IBEAM`: the text pointer, over a text field.
+    Text,
 }
 
 impl Cursor {
@@ -170,6 +188,7 @@ impl Cursor {
             Cursor::Default => CursorIcon::Default,
             Cursor::HourGlass => CursorIcon::Wait,
             Cursor::NoDrop => CursorIcon::NoDrop,
+            Cursor::Text => CursorIcon::Text,
         }
     }
 }
@@ -229,6 +248,41 @@ pub enum Input {
     Close,
 }
 
+/// A text field's text for a touch screen's own text box
+/// ([`App::take_text_tapped`]): lines apart by `\n`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEdit {
+    pub text: String,
+    pub multiline: bool,
+    /// How many characters it takes.
+    pub max: usize,
+}
+
+/// Whether the main pointer is a finger: in a phone's or a tablet's
+/// browser. Natively it's taken as a mouse.
+#[must_use]
+pub fn touch_screen() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    return web::touch_screen();
+    #[cfg(not(target_arch = "wasm32"))]
+    false
+}
+
+/// The least height (game pixels) the automatic UI scale leaves on a
+/// touch screen ([`touch_scale`]).
+pub const TOUCH_MIN_HEIGHT: u32 = 360;
+
+/// The automatic UI scale on a touch screen: the one that makes the
+/// desktop `width` wide (the toolbars, so that they fill the screen's
+/// width exactly, not in quarters: a phone's pixels are too small to see
+/// the uneven ones) while leaving it [`TOUCH_MIN_HEIGHT`] high; 1 to
+/// [`MAX_UI_SCALE`].
+#[must_use]
+pub fn touch_scale(client: (u32, u32), width: u32) -> f64 {
+    let fit = (f64::from(client.0) / f64::from(width.max(1))).min(f64::from(client.1) / f64::from(TOUCH_MIN_HEIGHT));
+    fit.clamp(1.0, MAX_UI_SCALE)
+}
+
 /// A file dropped onto the window: its name, where it is (natively; the
 /// browser gives only its bytes) and its bytes.
 #[derive(Debug, Clone)]
@@ -253,6 +307,30 @@ pub trait App {
     fn resize(&mut self, width: u32, height: u32);
     /// A file was dropped onto the window (a port extension).
     fn dropped(&mut self, _file: DroppedFile) {}
+    /// Whether the game wants key presses with no text field edited (a
+    /// running Keypress): in the browser a touch screen's keyboard comes
+    /// up.
+    fn wants_text(&self) -> bool {
+        false
+    }
+    /// The text field just pressed, once: after a finger's tap the browser
+    /// edits it in a text box of its own ([`App::text_edited`]).
+    fn take_text_tapped(&mut self) -> Option<TextEdit> {
+        None
+    }
+    /// The text field's new text, edited in the browser's text box.
+    fn text_edited(&mut self, _text: String) {}
+    /// How wide the game's toolbars are (game pixels): on a touch screen
+    /// the automatic UI scale makes them fill the screen's width.
+    fn touch_width(&self) -> u32 {
+        MIN_DESKTOP.0
+    }
+    /// Whether a finger held still on a touch screen is a double click
+    /// ([`LONG_PRESS`]); while the game runs a held finger is a held
+    /// button.
+    fn long_press_doubles(&self) -> bool {
+        false
+    }
     /// A file or folder dropped onto the window natively, before it's
     /// read for [`App::dropped`]: whether the app took it as it is (a CD
     /// image, too big to read whole).
@@ -270,6 +348,14 @@ pub trait App {
     /// while an automatic one doesn't fit; called before the first frame
     /// and after every change.
     fn ui_scale_changed(&mut self, _asked: UiScale, _scale: f64) {}
+    /// Full screen on or off as the game asks now (its settings), asked
+    /// once each frame.
+    fn take_fullscreen(&mut self) -> Option<bool> {
+        None
+    }
+    /// The window went full screen or back (also by F11 or the browser);
+    /// called before the first frame and after every change.
+    fn fullscreen_changed(&mut self, _on: bool) {}
 }
 
 /// How the window opens; what isn't given comes from the settings file.
@@ -317,8 +403,22 @@ pub fn ui_scale(client: (u32, u32), scale_factor: f64, scale: UiScale) -> f64 {
 pub fn desktop(client: (u32, u32), scale: f64) -> (u32, u32) {
     let scale = scale.max(1.0);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let at = |px: u32| (f64::from(px) / scale).floor() as u32;
+    // A hair over, so that a scale that divides a size exactly (a touch
+    // screen's, `touch_scale`) isn't a pixel short by rounding.
+    let at = |px: u32| (f64::from(px) / scale + 1e-6).floor() as u32;
     (at(client.0), at(client.1))
+}
+
+/// How many times the game's pointer picture is enlarged, for a game
+/// pixel `scale` window pixels big on a display with `scale_factor`: the
+/// browser and macOS take a pointer picture in logical units (CSS pixels,
+/// points) and enlarge it by the scale factor themselves, the others take
+/// it in the display's own pixels.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn cursor_scale(scale: f64, scale_factor: f64) -> u32 {
+    let logical = cfg!(any(target_arch = "wasm32", target_os = "macos"));
+    let s = if logical { scale / scale_factor.max(0.25) } else { scale };
+    (s.round() as u32).max(1)
 }
 
 /// Whether `code` with `modifiers` toggles fullscreen: F11, Alt+Enter, and
@@ -347,8 +447,7 @@ impl Shown {
     fn update(&mut self, w: &Window, event_loop: &ActiveEventLoop, frame: &Frame<'_>, ui_scale: f64) {
         if let Some(img) = frame.cursor_image {
             let v = display::View::new(w.inner_size(), frame.width, frame.height, ui_scale);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let scale = (v.scale.round() as u32).max(1);
+            let scale = cursor_scale(f64::from(v.scale), w.scale_factor());
             let key = (img.key, scale);
             if self.custom != Some(key) {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.custom_cursors.entry(key) {
@@ -392,7 +491,20 @@ struct Runner<A> {
     options: WindowOptions,
     window: Option<(Arc<Window>, display::Display)>,
     last: Instant,
+    /// In the browser: when a frame was asked for that hasn't come yet.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    frame_asked: Option<Instant>,
     mouse: (i32, i32),
+    /// The finger that is the mouse on a touch screen, while it's down.
+    finger: Option<u64>,
+    /// Full screen as last told to the game.
+    told_fullscreen: Option<bool>,
+    /// When and where the finger came down, while it may still be a long
+    /// press: held still, not yet one.
+    pressing: Option<(Instant, (i32, i32))>,
+    /// The finger's long press was a double click: the rest of its touch is
+    /// ignored.
+    pressed_long: bool,
     error: Option<Error>,
     /// The desktop last handed to [`App::resize`].
     desktop: (u32, u32),
@@ -419,6 +531,130 @@ struct Runner<A> {
 }
 
 impl<A: App> Runner<A> {
+    /// The game's step, if `min` has passed since the last: whether it
+    /// took one.
+    fn step(&mut self, min: Duration) -> bool {
+        let now = Instant::now();
+        if now < self.last + min {
+            return false;
+        }
+        self.app.update(now - self.last);
+        self.last = now;
+        true
+    }
+
+    /// A mouse button pressed or let go.
+    fn mouse_button(&mut self, state: ElementState, b: MouseButton) {
+        if state == ElementState::Pressed {
+            audio::resume();
+        }
+        let button = match b {
+            MouseButton::Right => Some(Button::Right),
+            MouseButton::Middle => Some(Button::Middle),
+            MouseButton::Left => Some(Button::Left),
+            _ => None,
+        };
+        if let Some(button) = button {
+            let (x, y) = self.mouse;
+            self.app.input(match state {
+                ElementState::Pressed => Input::MouseDown { x, y, button },
+                ElementState::Released => Input::MouseUp { x, y, button },
+            });
+            // With a mouse a text field is typed into in place.
+            let _ = self.app.take_text_tapped();
+        }
+    }
+
+    /// A touch screen: the first finger down is the mouse with its left
+    /// button held (the game has no use for the others), moved to where
+    /// it touches first, so that what's under it is pointed at as the
+    /// mouse would; other fingers meanwhile are ignored.
+    fn touch(&mut self, t: Touch) {
+        let (x, y) = self.to_frame(t.location);
+        match t.phase {
+            TouchPhase::Started if self.finger.is_none() => {
+                self.finger = Some(t.id);
+                self.pressing = Some((Instant::now(), (x, y)));
+                self.pressed_long = false;
+                audio::resume();
+                self.mouse = (x, y);
+                self.app.input(Input::MouseMove { x, y });
+                self.app.input(Input::MouseDown {
+                    x,
+                    y,
+                    button: Button::Left,
+                });
+            }
+            TouchPhase::Moved if self.finger == Some(t.id) && self.pressed_long => {}
+            TouchPhase::Moved if self.finger == Some(t.id) && (x, y) != self.mouse => {
+                if self
+                    .pressing
+                    .is_some_and(|(_, p)| (p.0 - x).abs() > LONG_PRESS_SLOP || (p.1 - y).abs() > LONG_PRESS_SLOP)
+                {
+                    self.pressing = None;
+                }
+                self.mouse = (x, y);
+                self.app.input(Input::MouseMove { x, y });
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled if self.finger == Some(t.id) && self.pressed_long => {
+                self.finger = None;
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled if self.finger == Some(t.id) => {
+                self.finger = None;
+                self.pressing = None;
+                if (x, y) != self.mouse {
+                    self.mouse = (x, y);
+                    self.app.input(Input::MouseMove { x, y });
+                }
+                self.app.input(Input::MouseUp {
+                    x,
+                    y,
+                    button: Button::Left,
+                });
+                // A tapped text field: the browser's own text box edits it.
+                if let Some(field) = self.app.take_text_tapped() {
+                    #[cfg(target_arch = "wasm32")]
+                    web::edit_text(&field);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let _ = field;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// A finger held still for [`LONG_PRESS`] is a double click where it
+    /// came down (the game's double click opens a part's settings), if the
+    /// game takes it so: it lets go, then clicks there twice (the press,
+    /// held past the double-click time, was a click of its own).
+    fn long_press(&mut self) {
+        let Some((since, (x, y))) = self.pressing else { return };
+        if Instant::now() < since + LONG_PRESS {
+            return;
+        }
+        self.pressing = None;
+        if !self.app.long_press_doubles() {
+            return;
+        }
+        self.pressed_long = true;
+        let (mx, my) = self.mouse;
+        let left = Button::Left;
+        self.app.input(Input::MouseUp {
+            x: mx,
+            y: my,
+            button: left,
+        });
+        if (x, y) != self.mouse {
+            self.mouse = (x, y);
+            self.app.input(Input::MouseMove { x, y });
+        }
+        for _ in 0..2 {
+            self.app.input(Input::MouseDown { x, y, button: left });
+            self.app.input(Input::MouseUp { x, y, button: left });
+        }
+        let _ = self.app.take_text_tapped();
+    }
+
     fn to_frame(&self, pos: PhysicalPosition<f64>) -> (i32, i32) {
         let Some((window, _)) = &self.window else {
             return (0, 0);
@@ -436,7 +672,11 @@ impl<A: App> Runner<A> {
         let Some((window, _)) = &self.window else { return };
         let size = window.inner_size();
         let client = (size.width, size.height);
-        let scale = ui_scale(client, window.scale_factor(), self.ui);
+        let scale = if self.ui == UiScale::Auto && touch_screen() {
+            touch_scale(client, self.app.touch_width())
+        } else {
+            ui_scale(client, window.scale_factor(), self.ui)
+        };
         let desktop = desktop(client, scale);
         // Scales are whole quarters, exact in a float.
         #[allow(clippy::float_cmp)]
@@ -511,8 +751,23 @@ impl<A: App> Runner<A> {
     fn toggle_fullscreen(&mut self) {
         let Some((window, _)) = &self.window else { return };
         let full = window.fullscreen().is_none();
-        window.set_fullscreen(full.then_some(Fullscreen::Borderless(None)));
-        self.remembered.fullscreen = full;
+        self.set_fullscreen(full);
+    }
+
+    fn set_fullscreen(&mut self, on: bool) {
+        let Some((window, _)) = &self.window else { return };
+        window.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
+        self.remembered.fullscreen = on;
+    }
+
+    /// Tells the game if the window went full screen or back.
+    fn tell_fullscreen(&mut self) {
+        let Some((window, _)) = &self.window else { return };
+        let on = window.fullscreen().is_some();
+        if self.told_fullscreen != Some(on) {
+            self.told_fullscreen = Some(on);
+            self.app.fullscreen_changed(on);
+        }
     }
 
     /// A key, unless it toggles fullscreen.
@@ -561,25 +816,51 @@ impl<A: App> ApplicationHandler for Runner<A> {
             for f in web::take_drops() {
                 self.app.dropped(f);
             }
+            for text in web::take_edited() {
+                self.app.text_edited(text);
+            }
+            for (vk, down) in web::take_typed() {
+                self.app.input(if down { Input::KeyDown(vk) } else { Input::KeyUp(vk) });
+            }
         }
+        self.long_press();
         for t in clipboard::take_pasted() {
             self.app.pasted(t);
         }
         if let Some(ui) = self.app.take_ui_scale() {
             self.set_ui(ui);
         }
-        let now = Instant::now();
-        if now >= self.last + FRAME {
-            self.app.update(now - self.last);
-            self.last = now;
-            if let Some((w, _)) = &self.window {
+        if let Some(on) = self.app.take_fullscreen() {
+            self.set_fullscreen(on);
+        }
+        self.tell_fullscreen();
+        // In the browser the game steps with the display's frames
+        // (`requestAnimationFrame`), each frame asking for the next, so
+        // that every step is shown once; this only starts the loop, or
+        // starts it again should a frame not come. Elsewhere a timer steps.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let now = Instant::now();
+            if self.frame_asked.is_none_or(|t| now >= t + 4 * FRAME)
+                && let Some((w, _)) = &self.window
+            {
+                w.request_redraw();
+                self.frame_asked = Some(now);
+            }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(now + 4 * FRAME));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if self.step(NATIVE_STEP)
+                && let Some((w, _)) = &self.window
+            {
                 w.request_redraw();
             }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(self.last + FRAME));
         }
         if self.app.finished() {
             Self::exit(event_loop);
         }
-        event_loop.set_control_flow(ControlFlow::WaitUntil(self.last + FRAME));
     }
 }
 
@@ -614,6 +895,9 @@ impl<A: App> Runner<A> {
             Ok(w) => {
                 let w = Arc::new(w);
                 w.focus_window();
+                if let Some(c) = winit::platform::web::WindowExtWebSys::canvas(&*w) {
+                    web::setup_text(&c);
+                }
                 let slot = display::Display::start(event_loop, Arc::clone(&w));
                 self.pending = Some((w, slot));
             }
@@ -677,12 +961,6 @@ impl<A: App> Runner<A> {
     }
 
     fn handle(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
-        let button = |b| match b {
-            MouseButton::Right => Some(Button::Right),
-            MouseButton::Middle => Some(Button::Middle),
-            MouseButton::Left => Some(Button::Left),
-            _ => None,
-        };
         match event {
             WindowEvent::CloseRequested => self.app.input(Input::Close),
             WindowEvent::Resized(size) => {
@@ -711,18 +989,8 @@ impl<A: App> Runner<A> {
                     self.app.input(Input::MouseMove { x, y });
                 }
             }
-            WindowEvent::MouseInput { state, button: b, .. } => {
-                if state == ElementState::Pressed {
-                    audio::resume();
-                }
-                if let Some(button) = button(b) {
-                    let (x, y) = self.mouse;
-                    self.app.input(match state {
-                        ElementState::Pressed => Input::MouseDown { x, y, button },
-                        ElementState::Released => Input::MouseUp { x, y, button },
-                    });
-                }
-            }
+            WindowEvent::MouseInput { state, button: b, .. } => self.mouse_button(state, b),
+            WindowEvent::Touch(t) => self.touch(t),
             WindowEvent::MouseWheel { delta, .. } => {
                 let (dx, dy) = wheel_notches(&mut self.wheel, delta);
                 if (dx, dy) != (0, 0) {
@@ -751,10 +1019,27 @@ impl<A: App> Runner<A> {
                 Err(e) => eprintln!("{}: {e}", path.display()),
             },
             WindowEvent::RedrawRequested => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    self.long_press();
+                    self.step(BROWSER_STEP);
+                    web::want_text(self.app.wants_text());
+                }
                 if let Some((w, d)) = &mut self.window {
+                    // The next frame, asked for once this one is over
+                    // (winit drops a request made during it).
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        let next = Arc::clone(w);
+                        wasm_bindgen_futures::spawn_local(async move { next.request_redraw() });
+                        self.frame_asked = Some(Instant::now());
+                    }
                     let frame = self.app.frame();
                     self.shown.update(w, event_loop, &frame, self.scale);
-                    if let Err(e) = d.draw(&frame, self.scale) {
+                    // Every frame is shown again, changed or not: a window
+                    // system, or the browser behind a phone's keyboard, may
+                    // have lost what it showed. Only what changed is sent.
+                    if let Err(e) = d.draw(&frame, self.scale, true) {
                         self.fail(event_loop, e);
                     }
                 }
@@ -787,7 +1072,12 @@ pub fn run<A: App + 'static>(title: &str, options: WindowOptions, app: A) -> Res
         options,
         window: None,
         last: Instant::now(),
+        frame_asked: None,
         mouse: (0, 0),
+        finger: None,
+        told_fullscreen: None,
+        pressing: None,
+        pressed_long: false,
         error: None,
         desktop: (0, 0),
         ui,
@@ -859,6 +1149,30 @@ mod tests {
         assert_eq!(wheel_notches(&mut rest, px(30.0)), (0, 0));
         assert_eq!(wheel_notches(&mut rest, px(30.0)), (0, 1));
         assert_eq!(wheel_notches(&mut rest, px(-100.0)), (0, -2));
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn touch_scales_fill_the_width() {
+        // A phone upright, 720 pixels across: toolbars 507 wide fill it.
+        assert_eq!(touch_scale((720, 1600), 507), 720.0 / 507.0);
+        // On its side the height decides.
+        assert_eq!(touch_scale((2400, 1000), 507), 1000.0 / 360.0);
+        // Never below 1 nor above the most.
+        assert_eq!(touch_scale((400, 300), 505), 1.0);
+        assert_eq!(touch_scale((9000, 9000), 505), MAX_UI_SCALE);
+    }
+
+    #[test]
+    fn cursor_scales() {
+        // At UI scale 2 on a display of scale factor 2, the pointer's pixels
+        // are 2 window pixels: twice as big where the window system wants
+        // its own pixels, as it is where it enlarges it itself.
+        let logical = cfg!(any(target_arch = "wasm32", target_os = "macos"));
+        assert_eq!(cursor_scale(2.0, 2.0), if logical { 1 } else { 2 });
+        assert_eq!(cursor_scale(1.5, 1.5), if logical { 1 } else { 2 });
+        assert_eq!(cursor_scale(1.0, 1.0), 1);
+        assert_eq!(cursor_scale(3.0, 1.5), if logical { 2 } else { 3 });
     }
 
     #[test]

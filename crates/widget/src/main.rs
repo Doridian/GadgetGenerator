@@ -273,6 +273,9 @@ struct Workshop {
     options: Vec<std::ffi::OsString>,
     /// Started over on another CD: this one ends.
     done: bool,
+    /// The time not yet handed to the editor, which counts whole
+    /// milliseconds.
+    carry: Duration,
     /// Change CD... where there's no file dialog: the window asks for the
     /// CD image to be dropped on it instead of showing the game.
     #[cfg(not(target_arch = "wasm32"))]
@@ -326,7 +329,9 @@ impl App for Workshop {
         if self.asking.is_some() {
             return;
         }
-        let ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
+        self.carry += elapsed;
+        let ms = u64::try_from(self.carry.as_millis()).unwrap_or(u64::MAX);
+        self.carry -= Duration::from_millis(ms);
         if let Some(dark) = self.theme.changed() {
             self.editor.set_system_dark(dark);
         }
@@ -387,6 +392,30 @@ impl App for Workshop {
         }
     }
 
+    fn wants_text(&self) -> bool {
+        self.editor.wants_text()
+    }
+
+    fn take_text_tapped(&mut self) -> Option<platform::TextEdit> {
+        self.editor.take_text_tapped().map(|f| platform::TextEdit {
+            text: f.text,
+            multiline: f.multiline,
+            max: f.max,
+        })
+    }
+
+    fn text_edited(&mut self, text: String) {
+        self.editor.set_focused_text(&text);
+    }
+
+    fn touch_width(&self) -> u32 {
+        self.editor.bars_width()
+    }
+
+    fn long_press_doubles(&self) -> bool {
+        !self.editor.running
+    }
+
     fn frame(&self) -> Frame<'_> {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(screen) = &self.asking {
@@ -399,7 +428,11 @@ impl App for Workshop {
             pixels: &s.pixels,
             palette: &self.palette,
             overlay: None,
-            cursor: Cursor::Default,
+            cursor: if self.editor.pointer() == editor::Pointer::Text {
+                Cursor::Text
+            } else {
+                Cursor::Default
+            },
             cursor_image: match self.editor.pointer() {
                 editor::Pointer::Game(i) => self.editor.cursor_picture(i).map(|c| CursorImage {
                     key: u32::from(i),
@@ -408,7 +441,7 @@ impl App for Workshop {
                     hot: c.hot,
                     rgba: &c.rgba,
                 }),
-                editor::Pointer::Arrow => None,
+                editor::Pointer::Arrow | editor::Pointer::Text => None,
             },
             title: Some(self.editor.title()),
         }
@@ -419,7 +452,13 @@ impl App for Workshop {
     }
 
     fn resize(&mut self, width: u32, height: u32) {
-        let (w, h) = (width.max(platform::MIN_DESKTOP.0), height.max(platform::MIN_DESKTOP.1));
+        // On a touch screen the desktop may be as small as the toolbars.
+        let least = if platform::touch_screen() {
+            (self.editor.bars_width(), platform::TOUCH_MIN_HEIGHT)
+        } else {
+            platform::MIN_DESKTOP
+        };
+        let (w, h) = (width.max(least.0), height.max(least.1));
         self.editor.resize(w, h);
         self.editor.draw();
         #[cfg(not(target_arch = "wasm32"))]
@@ -456,6 +495,14 @@ impl App for Workshop {
 
     fn pasted(&mut self, text: String) {
         self.editor.paste_link(&text);
+    }
+
+    fn take_fullscreen(&mut self) -> Option<bool> {
+        self.editor.take_full_screen()
+    }
+
+    fn fullscreen_changed(&mut self, on: bool) {
+        self.editor.set_full_screen(on);
     }
 
     fn take_ui_scale(&mut self) -> Option<UiScale> {
@@ -665,12 +712,13 @@ fn start(args: &Args, assets: Assets) -> Result<(), platform::Error> {
     };
     let theme = platform::theme::SystemTheme::new();
     editor.set_system_dark(theme.dark());
-    // The port's enhancements, unless the settings file says `original`.
+    // The port's enhancements only if the player turned them on
+    // (`original=false` in the settings file): as the original otherwise.
     let settings_file = args.window.settings_file.clone();
-    let original = settings_file
+    let enhanced = settings_file
         .as_deref()
-        .is_some_and(|p| platform::settings::EnhanceSettings::load(p).original);
-    editor.set_enhanced(!original);
+        .is_some_and(|p| platform::settings::EnhanceSettings::load(p).original == Some(false));
+    editor.set_enhanced(enhanced);
     let app = Workshop {
         editor,
         sound: Sound::new(audio),
@@ -680,6 +728,7 @@ fn start(args: &Args, assets: Assets) -> Result<(), platform::Error> {
         #[cfg(not(target_arch = "wasm32"))]
         options: args.restart.clone(),
         done: false,
+        carry: Duration::ZERO,
         #[cfg(not(target_arch = "wasm32"))]
         asking: None,
     };

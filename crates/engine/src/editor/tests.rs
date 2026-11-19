@@ -176,6 +176,12 @@ fn running_takes_clicks_and_keys_only() {
 fn light_follows_the_system_until_pressed() {
     let Some(mut e) = editor() else { return };
     let light_on = |e: &Editor| (e.light, e.main_bar.get(id::LIGHT).unwrap().on);
+    // As the original, without the enhancements: a dark system leaves the
+    // light on.
+    e.set_system_dark(true);
+    assert_eq!(light_on(&e), (true, true));
+    e.set_system_dark(false);
+    e.set_enhanced(true);
     let press = |e: &mut Editor| {
         let on = !e.main_bar.get(id::LIGHT).unwrap().on;
         e.main_bar.get_mut(id::LIGHT).unwrap().on = on;
@@ -1090,4 +1096,24 @@ fn enhanced_toolbars_follow_the_pointer() {
     hold(&mut e, from, (from.0 + 20, from.1 + 20));
     assert_eq!(e.main_bar.pos, (at.0 + 20, at.1 + 20));
     e.mouse_up(from.0 + 20, from.1 + 20, Button::Left);
+}
+
+/// Switching the sound off plays its click and its own sound, after
+/// stopping what plays; what comes after is silent.
+#[test]
+fn sound_off_is_heard() {
+    use crate::sim::SoundCmd;
+    let Some(mut e) = editor() else { return };
+    let _ = e.take_sounds();
+    e.main_bar.get_mut(id::SOUND).unwrap().on = false;
+    e.toolbar_command(id::SOUND, false);
+    let v = e.take_sounds();
+    assert!(matches!(v.first(), Some(SoundCmd::StopAll)), "{v:?}");
+    assert_eq!(
+        v.iter().filter(|c| matches!(c, SoundCmd::Play { .. })).count(),
+        2,
+        "{v:?}"
+    );
+    e.toolbar_command(id::POINTER, true);
+    assert!(e.take_sounds().iter().all(|c| !matches!(c, SoundCmd::Play { .. })));
 }

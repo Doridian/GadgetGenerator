@@ -40,6 +40,8 @@ pub enum Outcome {
     None,
     Scale(Scale),
     Enhanced(bool),
+    /// Full screen on or off.
+    FullScreen(bool),
     /// Change CD...: the window closes and the host picks another.
     ChangeCd,
     Close,
@@ -54,16 +56,18 @@ enum Part {
     Smaller,
     Bigger,
     Enhanced,
+    FullScreen,
     ChangeCd,
 }
 
-const PARTS: [Part; 7] = [
+const PARTS: [Part; 8] = [
     Part::Close,
     Part::CloseBox,
     Part::Auto,
     Part::Smaller,
     Part::Bigger,
     Part::Enhanced,
+    Part::FullScreen,
     Part::ChangeCd,
 ];
 
@@ -74,6 +78,8 @@ pub struct SettingsBox {
     pub scale: Scale,
     pub current: f64,
     pub enhanced: bool,
+    /// Whether the window is full screen.
+    pub full_screen: bool,
     window: IRect,
     /// The part the mouse holds down.
     pressed: Option<Part>,
@@ -86,16 +92,24 @@ pub fn step(s: f64, up: bool) -> f64 {
     (n * STEP).clamp(MIN_SCALE, MAX_SCALE)
 }
 
-/// `s` as the window shows it: "1.5×".
+/// `s` as the window shows it: "1.5×", to two decimals (a touch
+/// screen's automatic scale isn't in quarters).
 #[must_use]
 pub fn label(s: f64) -> String {
-    format!("{s}×")
+    format!("{}×", (s * 100.0).round() / 100.0)
 }
 
 impl SettingsBox {
     /// The window centred in `area`.
     #[must_use]
-    pub fn new(assets: &Assets, area: IRect, scale: Scale, current: f64, enhanced: bool) -> SettingsBox {
+    pub fn new(
+        assets: &Assets,
+        area: IRect,
+        scale: Scale,
+        current: f64,
+        enhanced: bool,
+        full_screen: bool,
+    ) -> SettingsBox {
         let h = Self::height(assets);
         let window = IRect::sized(
             area.x0 + (area.width() - W) / 2,
@@ -107,6 +121,7 @@ impl SettingsBox {
             scale,
             current,
             enhanced,
+            full_screen,
             window,
             pressed: None,
         }
@@ -131,6 +146,8 @@ impl SettingsBox {
             + CHECK_H
             + note
             + MARGIN
+            + CHECK_H
+            + MARGIN
             + BUTTON_H
             + MARGIN
     }
@@ -144,7 +161,7 @@ impl SettingsBox {
     }
 
     /// The rectangles: the UI scale's group, its check box, −, the value,
-    /// +, the enhancements' check box, Change CD..., Close.
+    /// +, the enhancements' check box, full screen's, Change CD..., Close.
     fn layout(&self, assets: &Assets) -> Layout {
         let lh = ui::font(assets).map_or(13, |f| i32::from(f.height));
         let (x, y) = self.client();
@@ -156,6 +173,8 @@ impl SettingsBox {
         let value = IRect::sized(smaller.x1 + 4, row, 56, SMALL);
         let bigger = IRect::sized(value.x1 + 4, row, SMALL, SMALL);
         let enhanced = IRect::sized(x, group.y1 + MARGIN, inner, CHECK_H);
+        let note = i32::try_from(Self::note(assets).len()).unwrap_or(0) * lh;
+        let full_screen = IRect::sized(x, enhanced.y1 + note + MARGIN, inner, CHECK_H);
         let close = IRect::sized(
             self.window.x1 - FRAME - MARGIN - BUTTON_W,
             self.window.y1 - FRAME - MARGIN - BUTTON_H,
@@ -170,6 +189,7 @@ impl SettingsBox {
             value,
             bigger,
             enhanced,
+            full_screen,
             change_cd,
             close,
         }
@@ -183,6 +203,7 @@ impl SettingsBox {
             Part::Smaller => l.smaller,
             Part::Bigger => l.bigger,
             Part::Enhanced => l.enhanced,
+            Part::FullScreen => l.full_screen,
             Part::ChangeCd => l.change_cd,
         }
     }
@@ -226,6 +247,10 @@ impl SettingsBox {
                 self.enhanced = !self.enhanced;
                 Outcome::Enhanced(self.enhanced)
             }
+            Part::FullScreen => {
+                self.full_screen = !self.full_screen;
+                Outcome::FullScreen(self.full_screen)
+            }
             Part::ChangeCd => Outcome::ChangeCd,
         }
     }
@@ -261,13 +286,14 @@ impl SettingsBox {
         }
     }
 
-    /// A key: Enter and Esc close, A and E are the check boxes, − and +
+    /// A key: Enter and Esc close, A, E and F are the check boxes, − and +
     /// the scale, C Change CD....
     pub fn key(&mut self, vk: u16) -> Outcome {
         let part = match vk {
             0x0d | 0x1b => Part::Close,
             0x41 => Part::Auto,
             0x45 => Part::Enhanced,
+            0x46 => Part::FullScreen,
             0x43 => Part::ChangeCd,
             0x6d | 0xbd => Part::Smaller,
             0x6b | 0xbb => Part::Bigger,
@@ -322,6 +348,14 @@ impl SettingsBox {
             ui::label(s, font, l.enhanced.x0 + 17, y, &line, ui::BLACK);
             y += i32::from(font.height);
         }
+        check(
+            s,
+            font,
+            l.full_screen,
+            "&Full screen",
+            self.full_screen,
+            pressed(Part::FullScreen),
+        );
         ui::button(
             s,
             font,
@@ -342,6 +376,7 @@ struct Layout {
     value: IRect,
     bigger: IRect,
     enhanced: IRect,
+    full_screen: IRect,
     change_cd: IRect,
     close: IRect,
 }
@@ -371,6 +406,7 @@ mod tests {
         assert!((step(1.6, true) - 1.75).abs() < f64::EPSILON);
         assert_eq!(label(1.5), "1.5×");
         assert_eq!(label(2.0), "2×");
+        assert_eq!(label(720.0 / 507.0), "1.42×");
     }
 
     #[test]
@@ -379,6 +415,7 @@ mod tests {
             scale: Scale::Auto,
             current: 2.0,
             enhanced: true,
+            full_screen: false,
             window: IRect::default(),
             pressed: None,
         };
@@ -387,6 +424,8 @@ mod tests {
         assert_eq!(b.key(0x41), Outcome::Scale(Scale::Auto));
         assert_eq!(b.key(0x41), Outcome::Scale(Scale::Fixed(2.0)));
         assert_eq!(b.key(0x45), Outcome::Enhanced(false));
+        assert_eq!(b.key(0x46), Outcome::FullScreen(true));
+        assert_eq!(b.key(0x46), Outcome::FullScreen(false));
         b.scale = Scale::Fixed(1.0);
         assert_eq!(b.key(0x6d), Outcome::None, "− is greyed at 1×");
         assert_eq!(b.key(0x43), Outcome::ChangeCd);

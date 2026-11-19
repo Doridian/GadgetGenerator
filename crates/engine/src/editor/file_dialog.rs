@@ -286,6 +286,35 @@ fn root_label(p: &Path, cd: &str) -> String {
 }
 
 impl FileDialog {
+    /// Whether `p` (on the screen) is over the file name's field: the text
+    /// pointer.
+    #[must_use]
+    pub fn over_text(&self, p: (i32, i32)) -> bool {
+        if self.dropped.is_some() {
+            return false;
+        }
+        let q = self.to_client(p);
+        self.r.name.contains(q.0, q.1)
+    }
+
+    /// The file name's text, if it has the focus.
+    #[must_use]
+    pub fn focused_text(&self) -> Option<super::TextField> {
+        (self.focus == Focus::Name).then(|| super::TextField {
+            text: self.name.clone(),
+            multiline: false,
+            max: 255,
+        })
+    }
+
+    /// Replaces the file name.
+    pub fn set_focused_text(&mut self, text: &str) {
+        if self.focus == Focus::Name {
+            self.name = text.replace(['\r', '\n'], "").chars().take(255).collect();
+            self.name_sel = false;
+        }
+    }
+
     /// The dialog showing `dir` with `name` in the field (selected),
     /// centred in `area`.
     #[must_use]

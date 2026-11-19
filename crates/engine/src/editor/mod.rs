@@ -65,6 +65,8 @@ const UNTITLED: &str = "untitled.wgt";
 
 /// The Label's tag (`TxLb`).
 const LABEL: crate::gadget::Tag = crate::gadget::Tag::new(b"TxLb");
+/// The Keypress's tag (`Key_`).
+const KEYPRESS: crate::gadget::Tag = crate::gadget::Tag::new(b"Key_");
 
 const VK_SHIFT: u16 = 0x10;
 const VK_CONTROL: u16 = 0x11;
@@ -117,9 +119,22 @@ pub enum Button {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pointer {
     Arrow,
+    /// The system's text pointer (`IDC_IBEAM`), over a text field.
+    Text,
     /// 0 glove, 1 scissors, 2 plug (knot), 3 grabbing hand, 4 open hand
     /// (Move), 5 plug (wire), 6 pointing hand.
     Game(u8),
+}
+
+/// A text field's text, for editing it elsewhere (a phone's own text
+/// box, [`Editor::take_text_tapped`]): lines apart by `\n`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextField {
+    pub text: String,
+    /// Whether it takes more than one line.
+    pub multiline: bool,
+    /// How many characters it takes.
+    pub max: usize,
 }
 
 /// Which toolbar.
@@ -269,6 +284,9 @@ pub struct Editor {
     /// The Light and Sound buttons (`DAT_00493ddc`, `DAT_00493ddd`).
     pub light: bool,
     pub sound: bool,
+    /// How many of the queued sounds still play though the sound was just
+    /// switched off: its click and its own sound ([`Editor::take_sounds`]).
+    heard_after_off: usize,
     /// The Light button pressed away from the system's dark mode; none
     /// while it follows it ([`Editor::set_system_dark`]).
     light_chosen: Option<bool>,
@@ -337,6 +355,14 @@ pub struct Editor {
     settings: Option<SettingsBox>,
     /// The UI scale asked for and the one it gives, as the host says.
     ui_scale: (Scale, f64),
+    /// A text field was pressed since the host last asked
+    /// ([`Editor::take_text_tapped`]).
+    text_tapped: bool,
+    /// Whether the window is full screen, as the host says.
+    full_screen: bool,
+    /// Full screen as the player set it in the Settings window, for the
+    /// host.
+    new_full_screen: Option<bool>,
     /// The player's choices in the Settings window the host hasn't taken
     /// yet.
     new_scale: Option<Scale>,
@@ -377,6 +403,7 @@ impl Editor {
             finished: false,
             light: true,
             sound: true,
+            heard_after_off: 0,
             light_chosen: None,
             system_dark: false,
             main_bar: toolbar::main_toolbar(),
@@ -417,6 +444,9 @@ impl Editor {
             links: None,
             settings: None,
             ui_scale: (Scale::Auto, 1.0),
+            text_tapped: false,
+            full_screen: false,
+            new_full_screen: None,
             new_scale: None,
             new_enhanced: None,
             change_cd: false,
@@ -461,7 +491,18 @@ impl Editor {
     /// it follows it again.
     pub fn set_system_dark(&mut self, dark: bool) {
         self.system_dark = dark;
-        self.light = self.light_chosen.unwrap_or(!dark);
+        self.follow_system_light();
+    }
+
+    /// Whether the light follows a dark system theme off: one of the
+    /// port's enhancements (the original's light is on until pressed).
+    fn dark_off(&self) -> bool {
+        self.system_dark && self.tray.enhanced
+    }
+
+    /// The Light button as the system's theme has it, unless pressed.
+    fn follow_system_light(&mut self) {
+        self.light = self.light_chosen.unwrap_or(!self.dark_off());
         if let Some(e) = self.main_bar.get_mut(id::LIGHT) {
             e.on = self.light;
         }
@@ -578,7 +619,14 @@ impl Editor {
     pub fn take_sounds(&mut self) -> Vec<SoundCmd> {
         let mut v = std::mem::take(&mut self.env.sounds);
         if !self.sound {
-            v.retain(|c| !matches!(c, SoundCmd::Play { .. }));
+            // Those queued as the sound went off (its click and sound)
+            // play; the rest is silent.
+            let heard = std::mem::take(&mut self.heard_after_off);
+            let mut i = 0;
+            v.retain(|c| {
+                i += 1;
+                i <= heard || !matches!(c, SoundCmd::Play { .. })
+            });
         }
         v
     }
@@ -1116,7 +1164,14 @@ impl Editor {
             cmd::SETTINGS => {
                 let (scale, current) = self.ui_scale;
                 let area = self.worksheet();
-                self.settings = Some(SettingsBox::new(&self.assets, area, scale, current, self.tray.enhanced));
+                self.settings = Some(SettingsBox::new(
+                    &self.assets,
+                    area,
+                    scale,
+                    current,
+                    self.tray.enhanced,
+                    self.full_screen,
+                ));
             }
             // Printing: nothing to print to.
             _ => {}
@@ -1407,14 +1462,18 @@ impl Editor {
             self.drag = Some(Drag::Modal);
             return;
         }
-        if self.file_dialog.is_some() {
+        if let Some((f, _)) = &self.file_dialog {
+            let on_text = f.over_text((x, y));
             self.file_mouse_down((x, y), dbl);
             self.drag = Some(Drag::Modal);
+            self.text_tapped = on_text;
             return;
         }
         if let Some(d) = &mut self.dialog {
+            let on_text = d.over_text((x, y));
             d.mouse_down(&self.assets, (x, y), dbl);
             self.drag = Some(Drag::Modal);
+            self.text_tapped = on_text;
             return;
         }
         if let Some(d) = &mut self.puzzle_dialog {
@@ -1659,17 +1718,22 @@ impl Editor {
                 self.ui_sound(snd::CLICK);
                 self.light = on;
                 // Pressed back to the system's, it follows it again.
-                self.light_chosen = (on == self.system_dark).then_some(on);
+                self.light_chosen = (on == self.dark_off()).then_some(on);
             }
             id::SOUND => {
+                if !on {
+                    // What plays stops; the click and the switching-off
+                    // sound are still heard.
+                    self.env.sounds.push(SoundCmd::StopAll);
+                }
                 self.ui_sound(snd::CLICK);
                 if on {
                     self.sound = true;
                     self.ui_sound(snd::SOUND_ON);
                 } else {
                     self.ui_sound(snd::SOUND_OFF);
-                    self.env.sounds.push(SoundCmd::StopAll);
                     self.sound = false;
+                    self.heard_after_off = self.env.sounds.len();
                 }
             }
             id::POINTER | id::CUT | id::MOVE => self.ui_sound(snd::CLICK),
@@ -1911,6 +1975,7 @@ impl Editor {
     /// The port's enhancements on or off.
     pub fn set_enhanced(&mut self, on: bool) {
         self.tray.set_enhanced(on);
+        self.follow_system_light();
     }
 
     #[must_use]
@@ -1930,6 +1995,64 @@ impl Editor {
         std::mem::take(&mut self.change_cd)
     }
 
+    /// The window is full screen or not (the Settings window shows it).
+    pub fn set_full_screen(&mut self, on: bool) {
+        self.full_screen = on;
+        if let Some(s) = &mut self.settings {
+            s.full_screen = on;
+        }
+    }
+
+    /// Full screen as the player set it in the Settings window, once.
+    pub fn take_full_screen(&mut self) -> Option<bool> {
+        self.new_full_screen.take()
+    }
+
+    /// Whether key presses are wanted though no text field is being
+    /// edited: a running widget has a Keypress (a touch screen's keyboard
+    /// comes up after a touch).
+    #[must_use]
+    pub fn wants_text(&self) -> bool {
+        self.running && self.doc.gadgets.iter().any(|g| g.core.tag == KEYPRESS)
+    }
+
+    /// The text field last pressed, once, if it still has the focus: on a
+    /// touch screen the host edits it in a text box of its own (the
+    /// device's keyboard, its letters) and hands it back
+    /// ([`Editor::set_focused_text`]).
+    pub fn take_text_tapped(&mut self) -> Option<TextField> {
+        if !std::mem::take(&mut self.text_tapped) {
+            return None;
+        }
+        self.focused_text()
+    }
+
+    /// The focused text field's text.
+    #[must_use]
+    pub fn focused_text(&self) -> Option<TextField> {
+        if let Some((f, _)) = &self.file_dialog {
+            return f.focused_text();
+        }
+        self.dialog.as_ref().and_then(Dialog::focused_text)
+    }
+
+    /// Replaces the focused text field's text (edited elsewhere).
+    pub fn set_focused_text(&mut self, text: &str) {
+        if let Some((f, _)) = &mut self.file_dialog {
+            f.set_focused_text(text);
+        } else if let Some(d) = &mut self.dialog {
+            d.set_focused_text(text);
+        }
+    }
+
+    /// How wide the toolbars are together, from the left edge: on a touch
+    /// screen the automatic UI scale makes them as wide as the screen.
+    #[must_use]
+    pub fn bars_width(&self) -> u32 {
+        let right = self.main_bar.rect().x1.max(self.tray.bar.rect().x1) + 2;
+        u32::try_from(right).unwrap_or(0)
+    }
+
     fn settings_outcome(&mut self, o: settings::Outcome) {
         match o {
             settings::Outcome::None => {}
@@ -1937,6 +2060,7 @@ impl Editor {
                 self.ui_scale.0 = s;
                 self.new_scale = Some(s);
             }
+            settings::Outcome::FullScreen(on) => self.new_full_screen = Some(on),
             settings::Outcome::Enhanced(on) => {
                 self.set_enhanced(on);
                 self.new_enhanced = Some(on);
@@ -2240,6 +2364,13 @@ impl Editor {
             && self.prompt.is_none()
         {
             return h.pointer(&self.assets, self.mouse);
+        }
+        if self.prompt.is_none()
+            && !self.menu.covers(&self.assets, self.mouse)
+            && (self.dialog.as_ref().is_some_and(|d| d.over_text(self.mouse))
+                || self.file_dialog.as_ref().is_some_and(|(f, _)| f.over_text(self.mouse)))
+        {
+            return Pointer::Text;
         }
         if !self.over_view(self.mouse) {
             return Pointer::Arrow;

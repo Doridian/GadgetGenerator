@@ -5,6 +5,6 @@
 #
 #   docker run -p 8080:80 ghcr.io/doridian/gadgetgenerator   (or :1.2.3, a release)
 #   (then http://localhost:8080/)
-FROM nginx:1.30-alpine
+FROM nginx:1.31-alpine
 COPY gadget-generator-web/ /usr/share/nginx/html/
 EXPOSE 80
